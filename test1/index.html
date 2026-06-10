@@ -121,46 +121,54 @@ const CATS = [
   {key:"schedule", name:"개인 일정",   icon:"📅", color:"#c792ea", desc:"약속, 모임, 이벤트 등 시간 약속"},
 ];
 const KEY = "my_pms_v1";
-const SERVER = (location.protocol === "http:" || location.protocol === "https:");
 let tasks = [];
 let saveTimer = null;
+let HAS_SERVER = false;
+const ONLINE = (location.protocol === "http:" || location.protocol === "https:");
 
 function loadLocal(){ try{ return JSON.parse(localStorage.getItem(KEY)) || [] }catch(e){ return [] } }
 
-/* ===== 컴퓨터의 실제 파일(my-pms-data.json)에 자동 저장 — 로컬 서버 사용 ===== */
+/* ===== 저장 방식 자동 감지 =====
+   - PC에서 My PMS(로컬 서버)로 열면: 실제 파일(my-pms-data.json)에 자동 저장
+   - 온라인(예: Vercel)이나 파일로 열면: 브라우저(localStorage)에 저장 */
 async function boot(){
-  if(SERVER){
+  tasks = loadLocal();                          // 먼저 브라우저 데이터 사용
+  if(ONLINE){
     try{
       const r = await fetch("api/data", {cache:"no-store"});
-      if(r.ok){ const d = await r.json(); if(Array.isArray(d)) tasks = d; }
-      setStatus("server");
-    }catch(e){ tasks = loadLocal(); setStatus("fail"); }
-  } else {
-    tasks = loadLocal();
-    setStatus("local");
+      if(r.ok){
+        const d = await r.json();
+        if(Array.isArray(d)) tasks = d;          // 파일 서버가 있으면 그 데이터 우선
+        HAS_SERVER = true;
+      }
+    }catch(e){ /* 파일 서버 없음 (온라인 호스팅 등) → 브라우저 저장 사용 */ }
   }
+  setStatus();
   if(tasks.length === 0) seed();
   render();
 }
 
 function save(){
-  localStorage.setItem(KEY, JSON.stringify(tasks));            // 항상 브라우저에도 백업
-  if(SERVER){
+  localStorage.setItem(KEY, JSON.stringify(tasks));            // 항상 브라우저에 저장
+  if(HAS_SERVER){
     clearTimeout(saveTimer);
     saveTimer = setTimeout(()=>{
       fetch("api/data", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(tasks)})
-        .then(r=> setStatus(r.ok ? "server" : "fail"))
-        .catch(()=> setStatus("fail"));
+        .catch(()=>{ HAS_SERVER = false; setStatus(); });
     }, 300);
   }
   render();
 }
 
-function setStatus(mode){
+function setStatus(){
   const el = document.getElementById("fsStatus"); if(!el) return;
-  if(mode === "server"){ el.innerHTML = "✅ 자동 저장됨 — 컴퓨터의 <b>my-pms-data.json</b> 파일 + 브라우저 백업"; }
-  else if(mode === "fail"){ el.innerHTML = "⚠️ 파일 서버에 연결되지 않음 — 브라우저에만 저장 중입니다. <b>My PMS</b> 바로가기로 다시 실행해 주세요."; }
-  else { el.innerHTML = "💾 브라우저에 자동 저장됨 · 실제 파일에도 저장하려면 <b>My PMS</b> 바로가기로 실행하세요."; }
+  if(HAS_SERVER){
+    el.innerHTML = "✅ 자동 저장됨 — 컴퓨터의 <b>my-pms-data.json</b> 파일 + 브라우저 백업";
+  } else if(ONLINE){
+    el.innerHTML = "🌐 온라인 버전 — 이 브라우저에 저장됩니다 (기기 간 자동 동기화는 안 됨). 파일로 보관하려면 PC에서 <b>My PMS</b> 바로가기로 실행하세요.";
+  } else {
+    el.innerHTML = "💾 브라우저에 자동 저장됨 · 실제 파일에도 저장하려면 <b>My PMS</b> 바로가기로 실행하세요.";
+  }
 }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7) }
 function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0") }
