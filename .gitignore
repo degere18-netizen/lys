@@ -1,0 +1,19 @@
+# Node
+node_modules/
+dist/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# 개인 데이터 (PMS 할 일 기록 - 저장소에 올리지 않음)
+my-pms-data.json
+test1/my-pms-data.json
+
+# 로컬 설정
+.claude/settings.local.json
+
+# OS
+Thumbs.db
+.DS_Store

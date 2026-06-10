@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "My PMS",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["C:\\Users\\deger_oxqy5nk\\Desktop\\이연선\\테스트\\test1\\server.js"],
+      "port": 8787
+    }
+  ]
+}

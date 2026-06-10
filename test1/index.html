@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My PMS · 개인 업무 관리</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e2230; --line:#2a2f3d;
+    --text:#e8eaf0; --muted:#9aa3b2; --accent:#6c8cff;
+    --green:#3ecf8e; --red:#ff6b6b; --amber:#ffb454; --chip:#262b3a;
+    --shadow:0 8px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{
+    font-family:"Segoe UI","Malgun Gothic",system-ui,sans-serif;
+    background:radial-gradient(1200px 600px at 80% -10%, #1b2030 0%, var(--bg) 55%);
+    color:var(--text); min-height:100vh; padding:28px 22px 60px;
+  }
+  .wrap{max-width:1180px; margin:0 auto}
+  header.top{display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:14px; margin-bottom:22px}
+  .brand h1{font-size:26px; letter-spacing:.3px}
+  .brand p{color:var(--muted); margin-top:4px; font-size:13px}
+  .datechip{background:var(--panel); border:1px solid var(--line); padding:10px 16px; border-radius:14px; text-align:right}
+  .datechip .d{font-size:18px; font-weight:600}
+  .datechip .w{color:var(--muted); font-size:12px; margin-top:2px}
+
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px}
+  .stat{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:16px 18px}
+  .stat .n{font-size:28px; font-weight:700}
+  .stat .l{color:var(--muted); font-size:12px; margin-top:4px}
+  .stat .bar{height:6px; background:var(--panel2); border-radius:99px; margin-top:12px; overflow:hidden}
+  .stat .bar > i{display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--green)); border-radius:99px; transition:width .4s}
+
+  .today{background:linear-gradient(135deg,#23263a,#1a1d2b); border:1px solid #34406b; border-radius:20px; padding:20px 22px; margin-bottom:26px; box-shadow:var(--shadow)}
+  .today h2{font-size:17px; display:flex; align-items:center; gap:8px}
+  .today h2 .pill{font-size:11px; background:var(--accent); color:#fff; padding:3px 9px; border-radius:99px; font-weight:600}
+  .today .list{margin-top:14px; display:flex; flex-direction:column; gap:8px}
+  .today .empty{color:var(--muted); font-size:13px; padding:8px 2px}
+
+  .grid{display:grid; grid-template-columns:repeat(2,1fr); gap:16px}
+  @media(max-width:820px){.grid{grid-template-columns:1fr} .stats{grid-template-columns:repeat(2,1fr)}}
+  .col{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:16px 16px 14px; display:flex; flex-direction:column}
+  .col h3{font-size:15px; display:flex; align-items:center; gap:8px; margin-bottom:4px}
+  .col h3 .dot{width:10px; height:10px; border-radius:50%}
+  .col h3 .cnt{margin-left:auto; color:var(--muted); font-size:12px; font-weight:500}
+  .col .desc{color:var(--muted); font-size:12px; margin-bottom:12px}
+
+  .addrow{display:flex; gap:8px; margin-bottom:12px}
+  .addrow input[type=text]{flex:1; background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:10px; padding:9px 11px; font-size:13px; outline:none}
+  .addrow input[type=text]:focus{border-color:var(--accent)}
+  .addrow input[type=date]{background:var(--panel2); border:1px solid var(--line); color:var(--muted); border-radius:10px; padding:8px; font-size:12px; width:38px; color-scheme:dark; cursor:pointer}
+  .addrow button{background:var(--accent); border:none; color:#fff; border-radius:10px; padding:0 14px; font-size:18px; font-weight:600; cursor:pointer; line-height:1}
+  .addrow button:hover{filter:brightness(1.1)}
+
+  .items{display:flex; flex-direction:column; gap:7px; min-height:8px}
+  .item{display:flex; align-items:flex-start; gap:10px; background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:9px 11px; transition:.15s}
+  .item:hover{border-color:#3a4256}
+  .item.done{opacity:.5}
+  .item.done .txt{text-decoration:line-through}
+  .item .cb{width:18px; height:18px; flex:0 0 auto; margin-top:1px; cursor:pointer; accent-color:var(--green)}
+  .item .body{flex:1; min-width:0}
+  .item .txt{font-size:13.5px; word-break:break-word; line-height:1.4; cursor:text}
+  .item .meta{display:flex; align-items:center; gap:8px; margin-top:5px; flex-wrap:wrap}
+  .tag{font-size:10.5px; padding:2px 7px; border-radius:99px; background:var(--chip); color:var(--muted)}
+  .tag.due{color:#cdd5e3}
+  .tag.due.over{background:#3a1f23; color:var(--red)}
+  .tag.due.soon{background:#3a3320; color:var(--amber)}
+  .prio{font-size:10.5px; padding:2px 7px; border-radius:99px; cursor:pointer; user-select:none}
+  .prio.high{background:#3a1f23; color:var(--red)} .prio.med{background:#3a3320; color:var(--amber)} .prio.low{background:#1f3a2c; color:var(--green)}
+  .item .acts{display:flex; gap:4px; opacity:0; transition:.15s}
+  .item:hover .acts{opacity:1}
+  .iconbtn{background:transparent; border:none; color:var(--muted); cursor:pointer; font-size:13px; padding:3px 5px; border-radius:7px}
+  .iconbtn:hover{background:var(--panel); color:var(--text)}
+  .star{color:#4a5160}
+  .star.on{color:var(--amber)}
+  .col .colempty{color:#5b6373; font-size:12px; padding:10px 2px; text-align:center; border:1px dashed var(--line); border-radius:10px}
+
+  footer{margin-top:30px; color:#5b6373; font-size:12px; text-align:center; line-height:1.7}
+  footer button{background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:8px; padding:5px 11px; cursor:pointer; font-size:12px; margin:0 3px}
+  footer button:hover{border-color:var(--red); color:var(--red)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>🗂️ My PMS</h1>
+      <p>나만의 가벼운 업무·일정 관리 보드 · 모든 데이터는 이 브라우저에 자동 저장됩니다</p>
+    </div>
+    <div class="datechip">
+      <div class="d" id="todayDate">—</div>
+      <div class="w" id="todayWeek">—</div>
+    </div>
+  </header>
+
+  <section class="stats" id="stats"></section>
+
+  <section class="today">
+    <h2>⭐ 오늘 꼭 해야 하는 일 <span class="pill" id="todayCount">0</span></h2>
+    <div class="list" id="todayList"></div>
+  </section>
+
+  <section class="grid" id="grid"></section>
+
+  <footer>
+    <div id="fsStatus" style="margin-bottom:8px">💾 저장 준비 중…</div>
+    <button onclick="exportData()">📤 내보내기(JSON)</button>
+    <button onclick="document.getElementById('importFile').click()">📥 가져오기</button>
+    <button onclick="clearDone()">🧹 완료된 일 비우기</button>
+    <button onclick="resetAll()">⚠️ 전체 초기화</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)">
+  </footer>
+</div>
+
+<script>
+const CATS = [
+  {key:"company",  name:"회사 업무",   icon:"🏢", color:"#6c8cff", desc:"진행 중인 회사 업무 / 프로젝트"},
+  {key:"personal", name:"개인 업무",   icon:"🧾", color:"#3ecf8e", desc:"집안일, 행정처리 등 개인적인 할 일"},
+  {key:"growth",   name:"자기계발",   icon:"📚", color:"#ffb454", desc:"공부, 독서, 운동, 사이드 프로젝트"},
+  {key:"schedule", name:"개인 일정",   icon:"📅", color:"#c792ea", desc:"약속, 모임, 이벤트 등 시간 약속"},
+];
+const KEY = "my_pms_v1";
+const SERVER = (location.protocol === "http:" || location.protocol === "https:");
+let tasks = [];
+let saveTimer = null;
+
+function loadLocal(){ try{ return JSON.parse(localStorage.getItem(KEY)) || [] }catch(e){ return [] } }
+
+/* ===== 컴퓨터의 실제 파일(my-pms-data.json)에 자동 저장 — 로컬 서버 사용 ===== */
+async function boot(){
+  if(SERVER){
+    try{
+      const r = await fetch("api/data", {cache:"no-store"});
+      if(r.ok){ const d = await r.json(); if(Array.isArray(d)) tasks = d; }
+      setStatus("server");
+    }catch(e){ tasks = loadLocal(); setStatus("fail"); }
+  } else {
+    tasks = loadLocal();
+    setStatus("local");
+  }
+  if(tasks.length === 0) seed();
+  render();
+}
+
+function save(){
+  localStorage.setItem(KEY, JSON.stringify(tasks));            // 항상 브라우저에도 백업
+  if(SERVER){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(()=>{
+      fetch("api/data", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(tasks)})
+        .then(r=> setStatus(r.ok ? "server" : "fail"))
+        .catch(()=> setStatus("fail"));
+    }, 300);
+  }
+  render();
+}
+
+function setStatus(mode){
+  const el = document.getElementById("fsStatus"); if(!el) return;
+  if(mode === "server"){ el.innerHTML = "✅ 자동 저장됨 — 컴퓨터의 <b>my-pms-data.json</b> 파일 + 브라우저 백업"; }
+  else if(mode === "fail"){ el.innerHTML = "⚠️ 파일 서버에 연결되지 않음 — 브라우저에만 저장 중입니다. <b>My PMS</b> 바로가기로 다시 실행해 주세요."; }
+  else { el.innerHTML = "💾 브라우저에 자동 저장됨 · 실제 파일에도 저장하려면 <b>My PMS</b> 바로가기로 실행하세요."; }
+}
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7) }
+function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0") }
+
+function addTask(cat, text, due){
+  text=text.trim(); if(!text) return;
+  tasks.push({id:uid(), cat, text, due:due||"", done:false, today:false, prio:"med", created:Date.now()});
+  save();
+}
+function toggle(id){ const t=tasks.find(x=>x.id===id); if(t){t.done=!t.done; save()} }
+function toggleToday(id){ const t=tasks.find(x=>x.id===id); if(t){t.today=!t.today; save()} }
+function cyclePrio(id){ const t=tasks.find(x=>x.id===id); if(!t) return; const o=["low","med","high"]; t.prio=o[(o.indexOf(t.prio)+1)%3]; save() }
+function del(id){ tasks=tasks.filter(x=>x.id!==id); save() }
+function editText(id){
+  const t=tasks.find(x=>x.id===id); if(!t) return;
+  const v=prompt("내용 수정:", t.text); if(v!==null && v.trim()){ t.text=v.trim(); save() }
+}
+function setDue(id){
+  const t=tasks.find(x=>x.id===id); if(!t) return;
+  const v=prompt("마감일 (YYYY-MM-DD, 비우면 삭제):", t.due||""); if(v!==null){ t.due=v.trim(); save() }
+}
+
+function dueInfo(due){
+  if(!due) return null;
+  const today=todayStr();
+  const diff=(new Date(due) - new Date(today))/86400000;
+  let cls="", label=due.slice(5);
+  if(diff<0){cls="over"; label="⚠ "+label}
+  else if(diff===0){cls="soon"; label="오늘 "+label}
+  else if(diff<=2){cls="soon"; label="D-"+diff+" "+label}
+  return {cls,label};
+}
+const PRIOLABEL={high:"높음", med:"보통", low:"낮음"};
+
+function itemHTML(t){
+  const di=dueInfo(t.due);
+  const dueTag = di ? `<span class="tag due ${di.cls}" onclick="setDue('${t.id}')">${di.label}</span>` : "";
+  return `<div class="item ${t.done?'done':''}">
+    <input class="cb" type="checkbox" ${t.done?'checked':''} onchange="toggle('${t.id}')">
+    <div class="body">
+      <div class="txt" onclick="editText('${t.id}')">${escapeHtml(t.text)}</div>
+      <div class="meta">
+        <span class="prio ${t.prio}" onclick="cyclePrio('${t.id}')">${PRIOLABEL[t.prio]}</span>
+        ${dueTag}
+        ${!di ? `<span class="tag" onclick="setDue('${t.id}')" style="cursor:pointer">+ 마감일</span>`:""}
+      </div>
+    </div>
+    <div class="acts">
+      <button class="iconbtn star ${t.today?'on':''}" title="오늘 할 일로 표시" onclick="toggleToday('${t.id}')">★</button>
+      <button class="iconbtn" title="삭제" onclick="del('${t.id}')">🗑</button>
+    </div>
+  </div>`;
+}
+
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) }
+
+function render(){
+  // date
+  const now=new Date();
+  const wk=["일","월","화","수","목","금","토"][now.getDay()];
+  document.getElementById("todayDate").textContent = `${now.getMonth()+1}월 ${now.getDate()}일`;
+  document.getElementById("todayWeek").textContent = `${now.getFullYear()}년 · ${wk}요일`;
+
+  // stats
+  const total=tasks.length, done=tasks.filter(t=>t.done).length;
+  const open=total-done;
+  const td=todayStr();
+  const todayTasks=tasks.filter(t=>!t.done && (t.today || t.due===td));
+  const overdue=tasks.filter(t=>!t.done && t.due && t.due<td).length;
+  const pct = total? Math.round(done/total*100):0;
+  document.getElementById("stats").innerHTML = `
+    ${statCard(open,"남은 일", pct)}
+    ${statCard(todayTasks.length,"오늘 할 일")}
+    ${statCard(overdue,"기한 지남")}
+    ${statCard(pct+"%","완료율", pct)}`;
+
+  // today
+  document.getElementById("todayCount").textContent = todayTasks.length;
+  const tl=document.getElementById("todayList");
+  if(todayTasks.length){
+    todayTasks.sort((a,b)=>prioRank(b)-prioRank(a));
+    tl.innerHTML = todayTasks.map(t=>{
+      const c=CATS.find(c=>c.key===t.cat);
+      return itemHTML(t).replace('<div class="meta">', `<div class="meta"><span class="tag" style="color:${c.color}">${c.icon} ${c.name}</span>`);
+    }).join("");
+  } else {
+    tl.innerHTML = `<div class="empty">오늘 집중할 일이 아직 없어요. 각 항목의 ★ 를 눌러 오늘 할 일로 지정하세요.</div>`;
+  }
+
+  // columns
+  document.getElementById("grid").innerHTML = CATS.map(c=>{
+    const list=tasks.filter(t=>t.cat===c.key).sort((a,b)=>(a.done-b.done)||(prioRank(b)-prioRank(a)));
+    const open=list.filter(t=>!t.done).length;
+    return `<div class="col">
+      <h3><span class="dot" style="background:${c.color}"></span>${c.icon} ${c.name}<span class="cnt">${open} / ${list.length}</span></h3>
+      <div class="desc">${c.desc}</div>
+      <div class="addrow">
+        <input type="text" placeholder="할 일 추가..." id="in_${c.key}"
+          onkeydown="if(event.key==='Enter'){addFrom('${c.key}')}">
+        <input type="date" id="due_${c.key}" title="마감일(선택)">
+        <button onclick="addFrom('${c.key}')">＋</button>
+      </div>
+      <div class="items">${ list.length ? list.map(itemHTML).join("") : `<div class="colempty">아직 등록된 항목이 없어요</div>` }</div>
+    </div>`;
+  }).join("");
+}
+function prioRank(t){ return {high:3,med:2,low:1}[t.prio]||0 }
+function statCard(n,l,pct){
+  return `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div>
+    ${pct!==undefined?`<div class="bar"><i style="width:${pct}%"></i></div>`:""}</div>`;
+}
+function addFrom(cat){
+  const inp=document.getElementById("in_"+cat), due=document.getElementById("due_"+cat);
+  addTask(cat, inp.value, due.value); inp.value=""; due.value="";
+  setTimeout(()=>{ const el=document.getElementById("in_"+cat); if(el) el.focus() },0);
+}
+
+function exportData(){
+  const blob=new Blob([JSON.stringify(tasks,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="my-pms-backup-"+todayStr()+".json"; a.click();
+}
+function importData(e){
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ const d=JSON.parse(r.result); if(Array.isArray(d)){ tasks=d; save(); alert("가져오기 완료!") } }catch(err){ alert("올바른 백업 파일이 아닙니다.") } };
+  r.readAsText(f); e.target.value="";
+}
+function clearDone(){ if(confirm("완료된 항목을 모두 삭제할까요?")){ tasks=tasks.filter(t=>!t.done); save() } }
+function resetAll(){ if(confirm("정말 모든 데이터를 삭제할까요? 되돌릴 수 없습니다.")){ tasks=[]; save() } }
+
+// 첫 실행 시 예시 데이터
+function seed(){
+  tasks=[
+    {id:uid(),cat:"company",text:"3분기 기획안 초안 작성",due:"",done:false,today:true,prio:"high",created:Date.now()},
+    {id:uid(),cat:"company",text:"팀 주간 회의 자료 정리",due:todayStr(),done:false,today:false,prio:"med",created:Date.now()},
+    {id:uid(),cat:"personal",text:"카드 명세서 확인하고 정리",due:"",done:false,today:false,prio:"low",created:Date.now()},
+    {id:uid(),cat:"growth",text:"영어 단어 30개 외우기",due:"",done:false,today:true,prio:"med",created:Date.now()},
+    {id:uid(),cat:"schedule",text:"저녁 7시 친구와 약속",due:todayStr(),done:false,today:false,prio:"med",created:Date.now()},
+  ];
+  save();
+}
+boot();
+</script>
+</body>
+</html>
