@@ -448,6 +448,33 @@
     <!-- ===== 운행코스 ===== -->
     <div id="tab-route" class="hide">
       <div class="page-head"><div><h1>운행코스</h1><div class="crumb">홈 · 운행코스</div></div><div class="badge">납품 주소지 기반 동선</div></div>
+
+      <style>
+        #weatherSec .wxday{font-weight:700;margin:16px 0 8px;color:#1d3a57;}
+        #weatherSec .wxday span{font-weight:500;color:#6f86a0;font-size:13px;margin-left:4px;}
+        #weatherSec .wxscroll{overflow-x:auto;}
+        #weatherSec .wxtbl{border-collapse:collapse;width:100%;min-width:680px;font-size:13px;}
+        #weatherSec .wxtbl th,#weatherSec .wxtbl td{border:1px solid #e6ebf2;text-align:center;padding:6px 4px;}
+        #weatherSec .wxtbl thead th{background:#f3f7fb;color:#516580;font-weight:600;font-size:12px;}
+        #weatherSec .wxtbl th:first-child,#weatherSec .wxtbl td:first-child{text-align:left;min-width:185px;position:sticky;left:0;background:#fff;}
+        #weatherSec .wxtbl thead th:first-child{background:#f3f7fb;}
+        #weatherSec .wxname{display:flex;align-items:center;gap:8px;}
+        #weatherSec .wxname b{font-size:13px;}
+        #weatherSec .wxname small{display:block;color:#8aa0b6;font-size:11px;}
+        #weatherSec .wxseq{width:20px;height:20px;border-radius:50%;background:#eef3f8;color:#1d6fb8;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+        #weatherSec .wxbase{background:#1d6fb8;color:#fff;font-size:10px;padding:2px 6px;border-radius:6px;flex-shrink:0;}
+        #weatherSec .wxbaserow td:first-child{background:#f7fbff;}
+        #weatherSec .wxbaserow{background:#f7fbff;}
+        #weatherSec .wxc .wxi{font-size:16px;line-height:1.15;}
+        #weatherSec .wxc .wxt{font-weight:600;color:#243b53;}
+        #weatherSec .wxc .wxp{font-size:10px;color:#1d6fb8;}
+      </style>
+      <section id="weatherSec">
+        <div class="sec-head"><div><h2>🌤️ 오늘 · 내일 날씨 — 출발지 및 납품 위치 (3시간 단위)</h2>
+        <p class="desc" id="wxNote">날씨 정보를 불러오는 중…</p></div></div>
+        <div id="wxBody"></div>
+      </section>
+
       <section>
         <div class="sec-head">
           <div><h2>운행 코스 — 담당자별 · 요일별 동선 · 예상비용</h2>
@@ -831,6 +858,77 @@ document.getElementById("routeXlsx").addEventListener("click",()=>{
   saveAOA(aoa,curDrv+"_운행코스","운행코스");
 });
 
+
+// ===== 날씨 위젯 (출발지 + 오늘 납품 위치, 3시간 단위) =====
+const WX_DAYKO=["일","월","화","수","목","금","토"];
+const WX_SLOTS=["00","03","06","09","12","15","18","21"];
+function wxCode(c){
+  if(c===0)return["☀️","맑음"];
+  if(c===1)return["🌤️","대체로 맑음"];
+  if(c===2)return["⛅","구름 조금"];
+  if(c===3)return["☁️","흐림"];
+  if(c===45||c===48)return["🌫️","안개"];
+  if(c>=51&&c<=57)return["🌦️","이슬비"];
+  if(c>=61&&c<=67)return["🌧️","비"];
+  if(c>=71&&c<=77)return["🌨️","눈"];
+  if(c>=80&&c<=82)return["🌧️","소나기"];
+  if(c>=85&&c<=86)return["🌨️","눈"];
+  if(c>=95)return["⛈️","뇌우"];
+  return["·","-"];
+}
+function wxLocations(){
+  const day=WX_DAYKO[new Date().getDay()];
+  const locs=[{label:"서울 신월동",sub:"출발지",ll:ROUTE.base.ll,base:true}];
+  const seen={};
+  Object.keys(ROUTE.drivers).forEach(dv=>{
+    const c=ROUTE.drivers[dv][day];
+    if(!c)return;
+    c.stops.forEach(s=>{ if(seen[s.name])return; seen[s.name]=1; locs.push({label:s.name,sub:dv,ll:s.ll}); });
+  });
+  return {day,locs};
+}
+async function renderWeather(){
+  const note=document.getElementById("wxNote"), body=document.getElementById("wxBody");
+  if(!note||!body)return;
+  const {day,locs}=wxLocations();
+  const lats=locs.map(l=>l.ll[0]).join(","), lons=locs.map(l=>l.ll[1]).join(",");
+  const url=`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=temperature_2m,weather_code,precipitation_probability&timezone=Asia%2FSeoul&forecast_days=2`;
+  try{
+    const r=await fetch(url); const j=await r.json();
+    const arr=Array.isArray(j)?j:[j];
+    const dset=[]; arr[0].hourly.time.forEach(ts=>{const d=ts.slice(0,10); if(!dset.includes(d))dset.push(d);});
+    const today=dset[0], tmrw=dset[1];
+    function cells(loc,dateStr){
+      const H=loc.hourly;
+      return WX_SLOTS.map(hh=>{
+        const idx=H.time.indexOf(`${dateStr}T${hh}:00`);
+        if(idx<0)return `<td class="wxc">-</td>`;
+        const ic=wxCode(H.weather_code[idx])[0];
+        const t=Math.round(H.temperature_2m[idx]);
+        const p=H.precipitation_probability?H.precipitation_probability[idx]:null;
+        const pr=(p!=null&&p>=30)?`<div class="wxp">☔${p}%</div>`:"";
+        return `<td class="wxc"><div class="wxi">${ic}</div><div class="wxt">${t}°</div>${pr}</td>`;
+      }).join("");
+    }
+    function tbl(dateStr,labelKo){
+      const dd=new Date(dateStr+"T00:00"); const dw=WX_DAYKO[dd.getDay()];
+      let h=`<div class="wxday">${labelKo} <span>${dateStr.slice(5).replace("-","/")} (${dw})</span></div>`;
+      h+=`<div class="wxscroll"><table class="wxtbl"><thead><tr><th>위치</th>${WX_SLOTS.map(s=>`<th>${s}시</th>`).join("")}</tr></thead><tbody>`;
+      locs.forEach((loc,i)=>{
+        const tag=loc.base?`<span class="wxbase">출발</span>`:`<span class="wxseq">${i}</span>`;
+        h+=`<tr class="${loc.base?'wxbaserow':''}"><td><div class="wxname">${tag}<div><b>${loc.label}</b><small>${loc.sub}</small></div></div></td>${cells(arr[i],dateStr)}</tr>`;
+      });
+      h+=`</tbody></table></div>`;
+      return h;
+    }
+    const n=locs.length-1;
+    note.innerHTML=`오늘(${day}요일) 납품 ${n}곳 + 출발지(신월동) · 3시간 단위 기온/하늘 상태 · 강수확률 30% 이상이면 ☔ 표시 · 자료: Open-Meteo`;
+    body.innerHTML=tbl(today,"오늘")+(tmrw?tbl(tmrw,"내일"):"");
+  }catch(e){
+    note.textContent="날씨 정보를 불러오지 못했습니다. 잠시 후 운행코스 탭을 다시 열어 주세요.";
+  }
+}
+renderWeather();
 
 // ===== 탭 / 소분류 전환 =====
 const SUBMETA={order:["구매 · 발주","홈 · 구매 · 발주"],receive:["구매 · 입고","홈 · 구매 · 입고"],analyze:["구매 · 분석","홈 · 구매 · 분석"]};
