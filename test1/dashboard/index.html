@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>포스메드 통합 대시보드 (구매)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="포스메드_거래데이터.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root{
+    --bg:#eef1f6; --card:#ffffff; --line:#e5e9f0; --ink:#1f2937; --muted:#6b7280;
+    --brand:#1d6fb8; --brand-dark:#0c447c; --teal:#0d9488; --amber:#d97706;
+    --red:#dc2626; --green:#16a34a; --purple:#7c3aed; --soft:#eef4fa;
+    --nav:#0e2a47;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Malgun Gothic','맑은 고딕',-apple-system,system-ui,sans-serif;
+    background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;}
+  .layout{display:flex;min-height:100vh;}
+
+  /* sidebar */
+  .side{width:236px;background:var(--nav);color:#cdd9e8;flex-shrink:0;display:flex;flex-direction:column;}
+  .side .brand{padding:22px 20px 16px;border-bottom:1px solid rgba(255,255,255,.08);}
+  .side .brand b{color:#fff;font-size:17px;display:block;}
+  .side .brand span{font-size:11px;color:#7e94ad;}
+  .nav{padding:12px 0;flex:1;display:flex;flex-direction:column;}
+  .navdiv{margin-top:16px;border-top:1px solid rgba(255,255,255,.12);margin-bottom:2px;padding-top:22px;position:relative;}
+  .navdiv::after{content:"물류 · 배송";position:absolute;top:8px;left:20px;font-size:10px;color:#6f86a0;letter-spacing:1px;}
+  .nav .navspacer{flex:1;}
+  .nav .item{display:flex;align-items:center;gap:12px;padding:13px 20px;cursor:pointer;font-size:14px;
+    border-left:3px solid transparent;transition:.12s;}
+  .nav .item .ic{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:700;background:rgba(255,255,255,.08);color:#9fb6d1;}
+  .nav .item .tx b{display:block;color:#dfe8f2;font-weight:600;}
+  .nav .item .tx span{font-size:11px;color:#7e94ad;}
+  .nav .item:hover{background:rgba(255,255,255,.05);}
+  .nav .item.active{background:rgba(29,111,184,.22);border-left-color:#3b9ae1;}
+  .nav .item.active .ic{background:#1d6fb8;color:#fff;}
+  .nav .item.active .tx b{color:#fff;}
+  .nav .item .caret{margin-left:auto;font-size:11px;color:#7e94ad;transition:transform .15s;}
+  .nav .item.parent.open .caret{transform:rotate(180deg);}
+  .subnav{max-height:0;overflow:hidden;transition:max-height .2s ease;background:rgba(0,0,0,.16);}
+  .subnav.open{max-height:160px;}
+  .subnav .subitem{display:flex;align-items:center;gap:9px;padding:10px 20px 10px 38px;font-size:13px;color:#a9bdd4;cursor:pointer;border-left:3px solid transparent;}
+  .subnav .subitem .dot{width:5px;height:5px;border-radius:50%;background:#5e789a;}
+  .subnav .subitem:hover{background:rgba(255,255,255,.05);color:#dbe6f2;}
+  .subnav .subitem.active{color:#fff;border-left-color:#3b9ae1;background:rgba(29,111,184,.16);}
+  .subnav .subitem.active .dot{background:#3b9ae1;}
+  .side .foot{padding:14px 20px;font-size:11px;color:#6f86a0;border-top:1px solid rgba(255,255,255,.08);}
+
+  /* main */
+  .main{flex:1;padding:24px 28px;overflow-x:hidden;}
+  .page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+  .page-head h1{margin:0;font-size:21px;font-weight:700;}
+  .page-head .crumb{font-size:12px;color:var(--muted);margin-top:2px;}
+  .page-head .badge{background:#fff;border:1px solid var(--line);padding:7px 13px;border-radius:20px;font-size:12px;color:var(--muted);}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;}
+  .kpi .label{font-size:12px;color:var(--muted);}
+  .kpi .val{font-size:24px;font-weight:700;margin-top:6px;}
+  .kpi .foot{font-size:11px;color:var(--muted);margin-top:4px;}
+  .kpi.red .val{color:var(--red);} .kpi.amber .val{color:var(--amber);}
+  .kpi.brand .val{color:var(--brand);} .kpi.green .val{color:var(--green);}
+  .kpi.clickable{cursor:pointer;transition:.12s;}
+  .kpi.clickable:hover{border-color:var(--brand);box-shadow:0 2px 10px rgba(29,111,184,.12);}
+  .kpi .more{float:right;font-size:11px;color:var(--brand);font-weight:600;}
+  .modal-bg{position:fixed;inset:0;background:rgba(15,30,50,.5);display:none;align-items:center;justify-content:center;z-index:50;}
+  .modal-bg.open{display:flex;}
+  .modal{background:#fff;border-radius:14px;width:min(560px,92vw);max-height:82vh;overflow:hidden;display:flex;flex-direction:column;}
+  .modal .mh{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);}
+  .modal .mh b{font-size:15px;} .modal .mh .sub{font-size:12px;color:var(--muted);}
+  .modal .x{border:none;background:#f1f3f6;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:15px;color:#555;}
+  .modal .mbody{overflow-y:auto;padding:6px 20px 18px;}
+  .bar{height:6px;background:#e5e9f0;border-radius:5px;overflow:hidden;margin-top:4px;}
+  .bar>span{display:block;height:100%;background:var(--brand);}
+
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:20px;}
+  section h2{font-size:15px;margin:0 0 4px;font-weight:700;}
+  section .desc{font-size:12px;color:var(--muted);margin:0 0 14px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);}
+  th{color:var(--muted);font-weight:600;font-size:12px;background:#fafbfd;}
+  td.num,th.num{text-align:right;}
+  .tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;}
+  .t-red{background:#fde8e8;color:#b91c1c;} .t-amber{background:#fef0dc;color:#b45309;}
+  .t-green{background:#e3f5e9;color:#15803d;} .t-gray{background:#eef0f3;color:#4b5563;}
+  .t-blue{background:#e6f1fb;color:#0c447c;}
+
+  .vendor-group{border:1px solid var(--line);border-radius:12px;margin-bottom:12px;overflow:hidden;}
+  .vendor-head{display:flex;align-items:center;justify-content:space-between;background:var(--soft);padding:10px 14px;}
+  .vendor-head .name{font-weight:700;}
+  .vendor-head .meta{font-size:12px;color:var(--muted);}
+  .btn{background:var(--brand);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;}
+  .btn:hover{background:var(--brand-dark);}
+  .xbtn{display:inline-flex;align-items:center;gap:5px;background:#1f8a4c;color:#fff;border:none;border-radius:8px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;}
+  .xbtn:hover{background:#176e3c;}
+  .xbtn .xi{font-size:13px;font-weight:800;background:rgba(255,255,255,.22);border-radius:4px;padding:0 4px;line-height:18px;}
+  .sec-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+  .infobtn{margin-left:8px;border:1px solid var(--line);background:#f7f9fc;color:var(--brand);border-radius:14px;padding:2px 10px;font-size:11px;font-weight:600;cursor:pointer;vertical-align:middle;}
+  .infobtn:hover{background:#eef4fa;border-color:var(--brand);}
+  section h2{display:flex;align-items:center;flex-wrap:wrap;gap:4px;}
+  .desc.collapsed{display:none;}
+
+  tr.po{cursor:pointer;} tr.po:hover{background:#f6f9fc;}
+  tr.po .chev{display:inline-block;transition:transform .15s;color:var(--muted);font-size:10px;}
+  tr.po.open .chev{transform:rotate(90deg);}
+  tr.detail td{background:#f8fafc;padding:0;}
+  .detail-inner{padding:6px 16px 14px;}
+  .detail-inner h4{margin:10px 0 6px;font-size:12px;color:var(--muted);font-weight:600;}
+  .detail-inner table th{background:#eef2f7;}
+  .progress{height:7px;background:#e5e9f0;border-radius:6px;overflow:hidden;min-width:70px;}
+  .progress > span{display:block;height:100%;}
+
+  .charts{display:grid;grid-template-columns:1.25fr 1fr;gap:18px;}
+  .chart-box{border:1px solid var(--line);border-radius:12px;padding:14px;}
+  .chart-box h3{font-size:13px;margin:0 0 10px;font-weight:600;}
+
+  .search-row{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+  .search-row input{flex:1;min-width:220px;border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:13px;}
+  .res-card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
+  .res-card .store{font-weight:700;}
+  .res-card .price{font-size:16px;font-weight:700;color:var(--brand);}
+  .note{font-size:11px;color:var(--muted);margin-top:8px;}
+
+  .soon{text-align:center;padding:30px 20px;}
+  .soon .big{font-size:34px;}
+  .soon h2{font-size:18px;margin:10px 0 6px;}
+  .soon p{color:var(--muted);max-width:520px;margin:0 auto 18px;}
+  .planlist{max-width:560px;margin:0 auto;text-align:left;}
+  .planlist .row{display:flex;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;background:#fafbfd;}
+  .planlist .row .n{width:24px;height:24px;border-radius:6px;background:var(--soft);color:var(--brand);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .planlist .row b{display:block;font-size:13px;}
+  .planlist .row span{font-size:12px;color:var(--muted);}
+  .hide{display:none;}
+  .modetabs{display:flex;gap:8px;margin-bottom:16px;}
+  .modetab{padding:9px 18px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;font-size:13px;color:var(--muted);font-weight:600;}
+  .modetab.active{background:var(--brand);color:#fff;border-color:var(--brand);}
+  .dropzone{border:2px dashed #c3cede;border-radius:12px;padding:34px 20px;text-align:center;color:var(--muted);background:#fafcff;cursor:pointer;transition:.12s;}
+  .dropzone:hover{border-color:var(--brand);background:#f3f8fd;}
+  .dropzone .ic2{font-size:32px;display:block;margin-bottom:8px;}
+  .dropzone b{color:var(--ink);}
+  .manual td{padding:6px 6px;}
+  .manual input{border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-size:13px;width:100%;}
+  .lnkbtn{background:none;border:none;color:var(--brand);font-size:12px;cursor:pointer;font-weight:600;}
+  .gen-head{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
+  .gen-head .f{background:#f7f9fc;border:1px solid var(--line);border-radius:8px;padding:9px 11px;}
+  .gen-head .f .k{font-size:11px;color:var(--muted);} .gen-head .f .v{font-weight:600;margin-top:2px;}
+  .livebar{display:flex;align-items:center;gap:8px;font-size:13px;color:#15803d;font-weight:600;background:#e9f7ef;border:1px solid #c5e9d3;border-radius:8px;padding:9px 13px;margin-bottom:12px;}
+  .livedot{width:9px;height:9px;border-radius:50%;background:#16a34a;animation:pulse 1.4s infinite;}
+  .livecnt{margin-left:auto;color:var(--muted);font-weight:500;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(22,163,74,.5)}70%{box-shadow:0 0 0 7px rgba(22,163,74,0)}100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}}
+  tr.newrow{animation:flash 1.2s ease;}
+  @keyframes flash{0%{background:#fff7e0}100%{background:transparent}}
+  .weektab{padding:9px 20px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;font-size:13px;color:var(--muted);font-weight:600;}
+  .weektab.active{background:var(--brand);color:#fff;border-color:var(--brand);}
+  .course-meta{display:flex;gap:22px;flex-wrap:wrap;background:#f7f9fc;border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:14px 0 18px;}
+  .course-meta .m .k{font-size:11px;color:var(--muted);} .course-meta .m .v{font-weight:600;margin-top:2px;}
+  .timeline{padding-left:2px;}
+  .stop{display:flex;gap:14px;}
+  .stop .rail{display:flex;flex-direction:column;align-items:center;}
+  .stop .mk{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;}
+  .stop .ln{flex:1;width:2px;background:#dde3ec;margin:3px 0;min-height:14px;}
+  .stop:last-child .ln{display:none;}
+  .stop .body{padding-bottom:20px;}
+  .stop .body .t1{font-weight:600;}
+  .stop .body .t2{font-size:12px;color:var(--muted);margin-top:3px;}
+  .daytabs{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap;}
+  .daytab{width:46px;height:46px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .daytab .d{font-size:14px;font-weight:700;} .daytab .dt{font-size:10px;color:var(--muted);}
+  .daytab.active{background:var(--brand);border-color:var(--brand);} .daytab.active .d,.daytab.active .dt{color:#fff;}
+  .routebar{display:flex;align-items:center;gap:10px;margin:12px 0 2px;flex-wrap:wrap;}
+  .statuspill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:7px 13px;border-radius:20px;background:#eef0f3;color:#4b5563;}
+  .statuspill::before{content:"";width:8px;height:8px;border-radius:50%;background:#9aa3af;}
+  .statuspill.plan{background:#e6f1fb;color:#0c447c;}.statuspill.plan::before{background:#1d6fb8;}
+  .statuspill.done{background:#e3f5e9;color:#15803d;}.statuspill.done::before{background:#16a34a;}
+  .statuspill.edit{background:#fef0dc;color:#b45309;}.statuspill.edit::before{background:#d97706;animation:pulse 1.4s infinite;}
+  .rbtn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;color:#374151;}
+  .rbtn:hover{background:#f4f6f9;}
+  .rbtn.pri{background:var(--brand);color:#fff;border-color:var(--brand);}.rbtn.pri:hover{background:var(--brand-dark);}
+  .rbtn.ok{background:#16a34a;color:#fff;border-color:#16a34a;}.rbtn.ok:hover{background:#12823c;}
+  .scard .ed{display:flex;gap:4px;margin-left:8px;}
+  .scard .ed button{width:24px;height:24px;border:1px solid var(--line);background:#fff;border-radius:6px;cursor:pointer;font-size:12px;line-height:1;color:#475569;}
+  .scard .ed button:hover{background:#eef4fa;border-color:var(--brand);}
+  .scard.locked{opacity:.85;}
+  .addrow{display:flex;gap:8px;margin-top:4px;}
+  .addrow select{flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 9px;font-size:12px;}
+  .route-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:14px 0 4px;}
+  .rstat{background:linear-gradient(160deg,#ffffff,#f4f8fd);border:1px solid var(--line);border-radius:13px;padding:13px 15px;}
+  .rstat .k{font-size:11px;color:var(--muted);}
+  .rstat .v{font-size:19px;font-weight:800;margin-top:5px;}
+  .rstat .v small{font-size:12px;font-weight:600;color:var(--muted);}
+  .rstat.fuel .v{color:#d97706;}
+  .coursewrap{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;align-items:stretch;}
+  .leafmap{height:430px;border-radius:14px;border:1px solid #cfdbea;overflow:hidden;z-index:0;box-shadow:0 2px 10px rgba(20,50,90,.08);}
+  .stopcards{display:flex;flex-direction:column;gap:10px;max-height:430px;overflow-y:auto;padding-right:2px;}
+  .scard{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:13px;padding:11px 13px;background:#fff;cursor:pointer;transition:.12s;}
+  .scard:hover{border-color:var(--brand);box-shadow:0 3px 12px rgba(29,111,184,.14);transform:translateY(-1px);}
+  .scard .seq{width:30px;height:30px;border-radius:9px;background:var(--soft);color:var(--brand);font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .scard.base .seq{background:#1d6fb8;color:#fff;}
+  .scard .nm{font-weight:700;font-size:13px;}
+  .scard .ad{font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;}
+  .scard .rt{margin-left:auto;text-align:right;flex-shrink:0;}
+  .leaf-pin{background:transparent;border:0;}
+  .leaf-pin div{width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 5px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;border:2px solid #fff;}
+  .leaf-pin span{transform:rotate(45deg);color:#fff;font-weight:800;font-size:12px;}
+  .smrow{display:flex;justify-content:space-between;padding:11px 2px;border-bottom:1px solid var(--line);font-size:14px;}
+  .smrow .k{color:var(--muted);}
+  @media(max-width:760px){.coursewrap{grid-template-columns:1fr;}}
+  @media(max-width:920px){.kpis{grid-template-columns:repeat(2,1fr);}.charts{grid-template-columns:1fr;}}
+  @media(max-width:560px){.side{width:60px;}.side .brand span,.nav .tx,.side .foot{display:none;}.nav .item{justify-content:center;}}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="side">
+    <div class="brand"><b>POSMED</b><span>통합 운영 대시보드</span></div>
+    <nav class="nav">
+      <div class="item" data-tab="intake"><div class="ic">접</div><div class="tx"><b>발주접수</b><span>발주서 업로드 · 자동생성</span></div></div>
+      <div class="item parent active open" data-tab="purchase"><div class="ic">구</div><div class="tx"><b>구매</b><span>발주 · 입고 · 분석</span></div><div class="caret">▾</div></div>
+      <div class="subnav open" id="subnav-purchase">
+        <div class="subitem active" data-sub="order"><span class="dot"></span>발주</div>
+        <div class="subitem" data-sub="receive"><span class="dot"></span>입고</div>
+        <div class="subitem" data-sub="analyze"><span class="dot"></span>분석</div>
+      </div>
+      <div class="item" data-tab="ship"><div class="ic">출</div><div class="tx"><b>출고</b><span>출고내역 · 출고분석</span></div></div>
+      <div class="item" data-tab="out"><div class="ic">재</div><div class="tx"><b>재고</b><span>실시간 현재고 · 수불부</span></div></div>
+      <div class="item" data-tab="sales"><div class="ic">영</div><div class="tx"><b>영업</b><span>거래명세서 · 수금</span></div></div>
+      <div class="item" data-tab="acct"><div class="ic">회</div><div class="tx"><b>회계</b><span>수금 · 고정비</span></div></div>
+      <div class="navdiv"></div>
+      <div class="item" data-tab="route"><div class="ic">운</div><div class="tx"><b>운행코스</b><span>요일별 동선 · 예상비용</span></div></div>
+    </nav>
+    <div class="foot">실데이터 기반 · 2025.01–2026.05<br>구매현황 15,003건 집계</div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main class="main">
+
+    <!-- ===== 발주접수 ===== -->
+    <div id="tab-intake" class="hide">
+      <div class="page-head">
+        <div><h1>발주접수</h1><div class="crumb">홈 · 발주접수 (1단계)</div></div>
+        <div class="badge">업무 흐름 시작점</div>
+      </div>
+
+      <section>
+        <h2>발주서 접수 · 입력</h2>
+        <p class="desc">거래처(병원·대리점)로부터 받은 발주서를 접수합니다. 입력 방식은 <b>자동 업로드</b>와 <b>수기 직접 입력</b> 두 가지입니다. 접수된 발주서는 현재고와 비교해 부족분 발주서를 자동 생성합니다.</p>
+
+        <div class="modetabs">
+          <div class="modetab active" data-mode="upload">① 자동 업로드</div>
+          <div class="modetab" data-mode="manual">② 수기 직접 입력</div>
+          <div class="modetab" data-mode="home">③ 홈페이지 자동 수신</div>
+        </div>
+
+        <!-- 자동 업로드 -->
+        <div id="mode-upload">
+          <div class="dropzone" id="dropzone">
+            <span class="ic2">⬆️</span>
+            <b>발주서 파일을 끌어다 놓거나 클릭해 업로드</b>
+            <div style="font-size:12px;margin-top:6px">엑셀(.xlsx) · PDF · 이미지(팩스 스캔) 지원 — 실제 업로드는 연동 시 활성화</div>
+          </div>
+        </div>
+
+        <!-- 수기 직접 입력 -->
+        <div id="mode-manual" class="hide">
+          <table class="manual"><thead><tr><th style="width:60%">품목명(규격)</th><th class="num">요청수량</th><th style="width:60px"></th></tr></thead>
+            <tbody id="manualRows"></tbody></table>
+          <button class="lnkbtn" id="addRow">+ 행 추가</button>
+        </div>
+
+        <!-- 홈페이지 자동 수신 -->
+        <div id="mode-home" class="hide">
+          <div class="livebar"><span class="livedot"></span> 홈페이지 주문 시스템과 실시간 연결됨 <span id="liveCnt" class="livecnt">0건 수신</span></div>
+          <table id="inboxTable"><thead><tr><th style="width:90px">수신시각</th><th>거래처</th><th class="num">품목수</th><th class="num">총 요청수량</th><th style="width:120px"></th></tr></thead><tbody></tbody></table>
+          <p class="note">※ 홈페이지에서 발주가 등록되면 위 목록에 자동으로 실시간 추가됩니다. (예시 시뮬레이션)</p>
+        </div>
+
+        <div style="margin-top:16px" id="genBtnWrap"><button class="btn" id="genBtn">발주서 자동 생성 ▸</button></div>
+      </section>
+
+      <!-- 자동 생성 결과 -->
+      <section id="genResult" class="hide">
+        <h2>자동 생성된 발주서 (자사 양식)</h2>
+        <p class="desc">접수된 발주 품목을 현재고와 비교해 <b>부족분</b>을 산출하고, 품목별 MOQ를 적용해 거래처별 발주수량을 자동 산정했습니다.</p>
+        <div class="gen-head">
+          <div class="f"><div class="k">발주번호</div><div class="v" id="poNo">—</div></div>
+          <div class="f"><div class="k">발주일</div><div class="v" id="poDate">—</div></div>
+          <div class="f"><div class="k">공급받는자</div><div class="v">주식회사 포스메드</div></div>
+          <div class="f"><div class="k">접수 방식</div><div class="v" id="poVia">—</div></div>
+        </div>
+        <table id="genTable"><thead><tr><th>거래처</th><th>품목</th><th class="num">요청수량</th><th class="num">현재고</th><th class="num">부족분</th><th class="num">MOQ</th><th class="num">발주수량</th></tr></thead><tbody></tbody></table>
+      </section>
+    </div>
+
+    <!-- ===== 구매 ===== -->
+    <div id="tab-purchase">
+      <div class="page-head">
+        <div><h1 id="puTitle">구매 · 발주</h1><div class="crumb" id="puCrumb">홈 · 구매 · 발주</div></div>
+        <div class="badge">실데이터 집계 · 2025.01 – 2026.05</div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi brand clickable" id="kpiAmt"><div class="label">당월 구매액 (2026-06) <span class="more">업체별 ▸</span></div><div class="val">1억 2,400만원</div><div class="foot">6/15 기준 진행중 · 월평균 1억 6,800만원</div></div>
+        <div class="kpi green"><div class="label">거래처</div><div class="val">86곳</div><div class="foot">상위 3곳이 61%</div></div>
+        <div class="kpi brand"><div class="label">취급 품목</div><div class="val">1,125종</div><div class="foot">의료기기 소모품</div></div>
+        <div class="kpi red"><div class="label">안전재고 미달 (예시)</div><div class="val">7</div><div class="foot">근접 5건 포함</div></div>
+      </div>
+
+      <!-- ===== 발주 ===== -->
+      <div id="sub-order" class="subpage">
+      <section>
+        <div class="sec-head"><h2>안전재고 · 결품 예측 기반 묶음 발주 제안</h2><button class="xbtn" id="orderXlsx"><span class="xi">X</span> 엑셀 출력</button></div>
+        <p class="desc">현재고와 안전재고를 비교하고, <b>월평균 출고량에서 당월 이미 나간 수량을 뺀 예상출고(잔여)</b>를 반영해 <b>예상 기말재고</b>를 산정합니다. 예상 기말재고가 안전재고보다 작으면 <b>결품 예상</b>으로 보고, 부족분을 같은 거래처끼리 묶어 MOQ 단위로 권장발주량을 자동 산정합니다.<br><span style="font-size:11px">· 권장발주 = (안전재고 + 예상출고잔여 − 현재고)를 MOQ 단위로 올림 &nbsp;·&nbsp; 발주주기 기준(월 1회/주 1회 등)은 기준표 수령 후 적용 &nbsp;·&nbsp; 기준일 2026-06-13(당월 진행중)</span></p>
+
+        <div class="vendor-group exp-order">
+          <div class="vendor-head"><div><span class="name">주식회사 세운메디칼</span> <span class="meta">· 결품예상 2 / 근접 1</span></div><button class="btn">발주서 생성 (3품목)</button></div>
+          <table>
+            <thead><tr><th>품목</th><th class="num">현재고</th><th class="num">월평균출고</th><th class="num">당월출고</th><th class="num">예상출고(잔여)</th><th class="num">예상기말재고</th><th class="num">안전재고</th><th class="num">MOQ</th><th class="num">권장발주</th><th>상태</th></tr></thead>
+            <tbody>
+              <tr><td>IV카테타 [24G * 3/4 (50EA)]</td><td class="num">180</td><td class="num">620</td><td class="num">360</td><td class="num">260</td><td class="num" style="color:#dc2626">-80</td><td class="num">310</td><td class="num">100</td><td class="num">400</td><td><span class="tag t-red">결품예상</span></td></tr>
+              <tr><td>실리콘폴리카테타 [16Fr]</td><td class="num">900</td><td class="num">2,250</td><td class="num">1,200</td><td class="num">1,050</td><td class="num" style="color:#dc2626">-150</td><td class="num">1,130</td><td class="num">500</td><td class="num">1,500</td><td><span class="tag t-red">결품예상</span></td></tr>
+              <tr><td>레빈튜브 [16F]</td><td class="num">720</td><td class="num">1,400</td><td class="num">800</td><td class="num">600</td><td class="num">120</td><td class="num">700</td><td class="num">300</td><td class="num">600</td><td><span class="tag t-amber">근접</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="vendor-group exp-order">
+          <div class="vendor-head"><div><span class="name">비엘테크 주식회사</span> <span class="meta">· 결품예상 2</span></div><button class="btn">발주서 생성 (2품목)</button></div>
+          <table>
+            <thead><tr><th>품목</th><th class="num">현재고</th><th class="num">월평균출고</th><th class="num">당월출고</th><th class="num">예상출고(잔여)</th><th class="num">예상기말재고</th><th class="num">안전재고</th><th class="num">MOQ</th><th class="num">권장발주</th><th>상태</th></tr></thead>
+            <tbody>
+              <tr><td>닐스프린트 [4＂ 롤형 F]</td><td class="num">35</td><td class="num">170</td><td class="num">90</td><td class="num">80</td><td class="num" style="color:#dc2626">-45</td><td class="num">85</td><td class="num">50</td><td class="num">150</td><td><span class="tag t-red">결품예상</span></td></tr>
+              <tr><td>닐스프린트 [3＂ 롤형 F]</td><td class="num">48</td><td class="num">135</td><td class="num">70</td><td class="num">65</td><td class="num" style="color:#dc2626">-17</td><td class="num">68</td><td class="num">40</td><td class="num">120</td><td><span class="tag t-red">결품예상</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 국내 판매처 검색 (발주) -->
+      <section>
+        <h2>병원 특정제품 요청 → 국내 판매처 검색 · 추천</h2>
+        <p class="desc">병원이 특정 제품을 요청하면 제품명·모델명·규격을 입력해 국내 판매·유통처와 가격대를 검색해 추천받습니다. (아래는 예시 결과)</p>
+        <div class="search-row"><input type="text" value="인퓨전 펌프용 연장선 200cm (루어락)" readonly><button class="btn">국내 판매처 검색</button></div>
+        <div class="res-card"><div><div class="store">○○메디칼몰</div><div style="font-size:12px;color:var(--muted)">재고 있음 · 익일 출고 · 최소 10개</div></div><div class="price">₩3,200 <span style="font-size:11px;color:var(--muted)">/개</span></div></div>
+        <div class="res-card"><div><div class="store">△△의료기 유통</div><div style="font-size:12px;color:var(--muted)">주문 후 2~3일 · 최소 20개</div></div><div class="price">₩2,950 <span style="font-size:11px;color:var(--muted)">/개</span></div></div>
+        <p class="note">※ 가격·재고는 검색 시점 기준이며, 최종 발주 전 확인이 필요합니다.</p>
+      </section>
+      </div><!-- /sub-order -->
+
+      <!-- ===== 입고 ===== -->
+      <div id="sub-receive" class="subpage hide">
+      <section>
+        <h2>발주 현황 · 발주–입고 대사</h2>
+        <p class="desc">발주 건을 클릭하면 해당 발주서의 품목별 입고 현황(발주수량 / 입고수량 / 부족수량 / 상태)이 상세로 펼쳐집니다. 전량입고 · 부족입고 · 미입고(대기중)를 자동 구분합니다.</p>
+        <table id="poTable"><thead><tr><th>발주번호</th><th>발주일</th><th>거래처</th><th class="num">품목수</th><th class="num">발주금액</th><th>입고상태</th></tr></thead><tbody></tbody></table>
+      </section>
+
+      </div><!-- /sub-receive -->
+
+      <!-- ===== 분석 ===== -->
+      <div id="sub-analyze" class="subpage hide">
+      <section>
+        <h2>구매추이 분석 (세부) — 실데이터</h2>
+        <p class="desc">실제 구매현황(2025.01–2026.05) 기준 월별 · 거래처별 · 제품군별 추이와 단가 변동입니다.</p>
+        <div class="charts">
+          <div class="chart-box"><h3>월별 구매액 추이 (단위: 원)</h3><canvas id="chMonthly" height="200"></canvas></div>
+          <div class="chart-box"><h3>거래처별 구매 비중</h3><canvas id="chVendor" height="200"></canvas></div>
+          <div class="chart-box"><h3>제품군별 구매액 (상위 7, 단위: 원)</h3><canvas id="chCategory" height="200"></canvas></div>
+          <div class="chart-box"><h3>단가 추이 — 일회용주사기 [3cc 23G]</h3><canvas id="chPrice" height="200"></canvas></div>
+        </div>
+      </section>
+
+      <!-- 상위 품목 -->
+      <section>
+        <h2>구매 상위 품목 (실데이터)</h2>
+        <p class="desc">누적 구매금액 기준 상위 품목입니다.</p>
+        <table id="topItems"><thead><tr><th>순위</th><th>품목</th><th class="num">누적수량</th><th class="num">누적 구매액</th></tr></thead><tbody></tbody></table>
+      </section>
+      </div><!-- /sub-analyze -->
+    </div>
+
+    <!-- ===== 출고 ===== -->
+    <div id="tab-ship" class="hide">
+      <div class="page-head"><div><h1>출고</h1><div class="crumb">홈 · 출고</div></div><div class="badge">실출고 기반 · 2025.01 – 2026.02</div></div>
+
+      <div class="kpis" id="shipKpis"></div>
+
+      <section>
+        <h2>출고 분석</h2>
+        <p class="desc">제품 출고(납품) 실데이터 기준 월별 출고 추이와 품목·납품처별 출고 분포입니다.</p>
+        <div class="charts">
+          <div class="chart-box"><h3>월별 출고액 추이 (단위: 원)</h3><canvas id="chShipMonthly" height="200"></canvas></div>
+          <div class="chart-box"><h3>납품처별 출고 비중 (상위 7)</h3><canvas id="chShipCust" height="200"></canvas></div>
+          <div class="chart-box" style="grid-column:1/-1"><h3>품목별 출고액 (상위 10, 단위: 원)</h3><canvas id="chShipItem" height="170"></canvas></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="sec-head">
+          <div><h2>출고내역 조회</h2>
+          <p class="desc">기간 · 납품처 · 품목으로 제품 출고 내역을 조회합니다. (운영 로그 — 거래명세서는 영업 탭에서 출력)</p></div>
+          <button class="xbtn" id="shipXlsx"><span class="xi">X</span> 엑셀 출력</button>
+        </div>
+        <div class="gen-head" style="grid-template-columns:1.4fr 1fr 1fr 1.2fr">
+          <div class="f"><div class="k">납품처</div><select id="shCust" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:7px 8px;font-size:13px;margin-top:3px"></select></div>
+          <div class="f"><div class="k">시작일</div><input type="date" id="shFrom" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:13px;margin-top:3px"></div>
+          <div class="f"><div class="k">종료일</div><input type="date" id="shTo" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:13px;margin-top:3px"></div>
+          <div class="f"><div class="k">품목 검색(선택)</div><input type="text" id="shItem" placeholder="예: 바로박" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:13px;margin-top:3px"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <button class="btn" id="shSearch">조회</button>
+          <span id="shSummary" style="margin-left:auto;align-self:center;font-size:13px;color:var(--muted)"></span>
+        </div>
+        <table id="shTable">
+          <thead><tr><th>일자</th><th>품목 및 규격</th><th class="num">출고수량</th><th class="num">단가</th><th class="num">출고금액</th><th>납품처</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </div>
+
+    <!-- ===== 재고 ===== -->
+    <div id="tab-out" class="hide">
+      <div class="page-head"><div><h1>재고</h1><div class="crumb">홈 · 재고</div></div><div class="badge">실시간 현재고 조회</div></div>
+
+      <section>
+        <h2>실시간 현재고 조회</h2>
+        <p class="desc">품목명·납품처를 입력하면 <b>단가 · 현재고 · 안전재고 · 납품처 사용현황</b>을 즉시 확인합니다. 출고가 발생하면 현재고가 실시간으로 갱신됩니다.<br><span style="font-size:11px">· 누적판매·월평균출고·단가·납품처는 실판매현황(2025.01–2026.06, 18개월) 집계 &nbsp;·&nbsp; 안전재고=월평균출고×0.8, 현재고·출고예약은 예시</span></p>
+        <div class="livebar"><span class="livedot"></span> 재고 시스템과 실시간 연결됨 <span id="invUpdated" class="livecnt">마지막 갱신 —</span></div>
+        <div class="search-row">
+          <input type="text" id="invSearch" placeholder="품목명·납품처 검색 (예: 닐스프린트, 바로박, 요양병원)">
+          <button class="btn" id="invClear">전체 보기</button>
+        </div>
+        <table id="invTable">
+          <thead><tr><th>품목</th><th class="num">단가</th><th class="num">누적판매</th><th class="num">월평균출고</th><th>납품처</th><th class="num">현재고</th><th class="num">안전재고</th><th class="num">가용재고</th><th>상태</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p class="note">※ 가용재고 = 현재고 − 출고예약. 납품처 칸: <span class="tag t-blue">공용</span> 여러 납품처가 사용 / <span class="tag t-gray">단독</span> 특정 납품처 전용 — 마우스를 올리면 납품처명이 표시됩니다. 상태는 가용재고와 안전재고 비교로 자동 판정합니다.</p>
+      </section>
+    </div>
+
+    <!-- ===== 운행코스 ===== -->
+    <div id="tab-route" class="hide">
+      <div class="page-head"><div><h1>운행코스</h1><div class="crumb">홈 · 운행코스</div></div><div class="badge">납품 주소지 기반 동선</div></div>
+      <section>
+        <div class="sec-head">
+          <div><h2>운행 코스 — 담당자별 · 요일별 동선 · 예상비용</h2>
+          <p class="desc">실제 납품 주소지(19곳)를 담당자별로 묶고, 출발지(서울 신월) 기준 <b>최근접 경로</b>로 동선을 자동 구성합니다. 카드를 클릭하면 상세가 크게 표시됩니다.<br><span style="font-size:11px">· 빠른 길(고속도로 우선) 기준 · 디젤 트럭 · 연비 9 km/L · 경유 ₩1,700/L · 톨게이트 ₩50/km(화물 근사) · 도로 보정 1.3배 &nbsp;·&nbsp; 예상비용 = 유류비 + 톨게이트 &nbsp;·&nbsp; 요일 묶음은 자동 제안 · 좌표는 행정동 근사값</span></p></div>
+          <button class="xbtn" id="routeXlsx"><span class="xi">X</span> 엑셀 출력</button>
+        </div>
+        <div class="modetabs" id="driverTabs"></div>
+        <div class="daytabs" id="dayTabs"></div>
+        <div class="routebar" id="routeBar"></div>
+        <div class="route-stats" id="courseStats"></div>
+        <div class="coursewrap">
+          <div id="routeMap" class="leafmap"></div>
+          <div class="stopcards" id="stopCards"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- 운행 정류장 상세 모달 -->
+    <div class="modal-bg" id="stopModal">
+      <div class="modal">
+        <div class="mh"><div><b id="smName">—</b> <span class="sub" id="smSeq"></span></div><button class="x" id="smClose">✕</button></div>
+        <div class="mbody" id="smBody"></div>
+      </div>
+    </div>
+
+    <!-- ===== 영업 ===== -->
+    <div id="tab-sales" class="hide">
+      <div class="page-head"><div><h1>영업 · 거래명세서</h1><div class="crumb">홈 · 영업 · 거래명세서 출력</div></div><div class="badge">실거래 기반 · 2025.01 – 2026.02</div></div>
+
+      <section>
+        <div class="sec-head">
+          <div><h2>거래명세서 조회 · 출력</h2>
+          <p class="desc">납품처 · 기간 · 품목을 기준으로 실거래 내역을 조회하고, <b>거래명세서 인쇄</b> 또는 <b>엑셀 출력</b>이 가능합니다.</p></div>
+          <button class="xbtn" id="txXlsx"><span class="xi">X</span> 엑셀 출력</button>
+        </div>
+        <div class="gen-head" style="grid-template-columns:1.4fr 1fr 1fr 1.2fr">
+          <div class="f"><div class="k">납품처</div><select id="txCust" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:7px 8px;font-size:13px;margin-top:3px"></select></div>
+          <div class="f"><div class="k">시작일</div><input type="date" id="txFrom" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:13px;margin-top:3px"></div>
+          <div class="f"><div class="k">종료일</div><input type="date" id="txTo" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:13px;margin-top:3px"></div>
+          <div class="f"><div class="k">품목 검색(선택)</div><input type="text" id="txItem" placeholder="예: 닐스프린트" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:13px;margin-top:3px"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <button class="btn" id="txSearch">조회</button>
+          <button class="btn" id="txPrint" style="background:#475569">거래명세서 인쇄</button>
+          <span id="txSummary" style="margin-left:auto;align-self:center;font-size:13px;color:var(--muted)"></span>
+        </div>
+        <table id="txTable">
+          <thead><tr><th>일자</th><th>품목 및 규격</th><th class="num">수량</th><th class="num">단가</th><th class="num">공급가액</th><th class="num">부가세</th><th class="num">합계</th><th>납품처</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section>
+        <div class="sec-head">
+          <div><h2>거래처별 수금현황 (실시간 관리)</h2>
+          <p class="desc">납품처별 출고(매출) 합계 대비 입금액을 비교해 <b>미수금</b>을 추적합니다. 회계에서 옮겨온 영업 관리 기능입니다.<br><span style="font-size:11px">· 매출액은 실거래 합계, 입금액·수금률은 예시 — 실제 입금 연동 시 자동 갱신</span></p></div>
+          <button class="xbtn" id="arXlsx"><span class="xi">X</span> 엑셀 출력</button>
+        </div>
+        <div class="kpis" id="arKpis" style="margin-bottom:16px"></div>
+        <table id="arTable">
+          <thead><tr><th>납품처</th><th class="num">매출액(누적)</th><th class="num">입금액</th><th class="num">미수금</th><th class="num">수금률</th><th>상태</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </div>
+
+    <!-- ===== 회계 ===== -->
+    <div id="tab-acct" class="hide">
+      <div class="page-head"><div><h1>회계</h1><div class="crumb">홈 · 회계</div></div><div class="badge">준비중</div></div>
+      <section><div class="soon"><div class="big">💳</div><h2>회계 영역</h2>
+        <p>입출금 내역을 자동으로 회계에 반영하고, 월별 고정비를 분석합니다. (거래처별 수금현황은 영업 탭으로 이동)</p>
+        <div class="planlist">
+          <div class="row"><div class="n">1</div><div><b>입출금 내역 자동 회계반영</b><span>수기입력 최소화 · 휴먼에러(누락·중복) 방지</span></div></div>
+          <div class="row"><div class="n">2</div><div><b>고정비 분석</b><span>월별 고정비 추이</span></div></div>
+        </div></div></section>
+    </div>
+
+  </main>
+</div>
+
+<!-- 업체별 구매 모달 -->
+<div class="modal-bg" id="vendModal">
+  <div class="modal">
+    <div class="mh"><div><b>구매업체별 현황</b> <span class="sub">· 누적 2025.01–2026.05 기준</span></div><button class="x" id="vendClose">✕</button></div>
+    <div class="mbody"><table id="vendTable"><thead><tr><th>순위</th><th>거래처</th><th class="num">건수</th><th class="num">구매액</th><th class="num">비중</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+
+<script>
+// ===== 실데이터 집계 결과 =====
+const MONTHS=[{"ym":"2025-01","amt":177.9},{"ym":"2025-02","amt":205.4},{"ym":"2025-03","amt":179.7},{"ym":"2025-04","amt":197.6},{"ym":"2025-05","amt":38.7},{"ym":"2025-07","amt":169.0},{"ym":"2025-08","amt":179.2},{"ym":"2025-09","amt":213.2},{"ym":"2025-10","amt":162.7},{"ym":"2025-11","amt":90.0},{"ym":"2026-01","amt":207.3},{"ym":"2026-02","amt":190.7},{"ym":"2026-03","amt":191.9},{"ym":"2026-04","amt":246.0},{"ym":"2026-05","amt":64.5}];
+const VEND=[{"name":"세운메디칼","amt":851.8},{"name":"비엘테크","amt":436.1},{"name":"아남메디칼","amt":233.2},{"name":"메디메스터","amt":136.0},{"name":"경기의료공업","amt":132.7},{"name":"성심메디칼","amt":101.6},{"name":"기타(80곳)","amt":622.3}];
+const GRP=[{"name":"닐스프린트","amt":331.7},{"name":"바로박","amt":257.9},{"name":"실리콘폴리카테타","amt":173.5},{"name":"IV카테타","amt":150.2},{"name":"멸균글러브","amt":135.7},{"name":"일회용주사기","amt":101.5},{"name":"닐케스트","amt":81.9}];
+const PRICE=[{"ym":"2025-01","price":4007},{"ym":"2025-02","price":4165},{"ym":"2025-03","price":3914},{"ym":"2025-04","price":4100},{"ym":"2025-07","price":3800},{"ym":"2025-08","price":3800},{"ym":"2025-09","price":3863},{"ym":"2025-10","price":3914},{"ym":"2025-11","price":3836},{"ym":"2026-01","price":3880},{"ym":"2026-02","price":3800},{"ym":"2026-03","price":3800},{"ym":"2026-04","price":5149},{"ym":"2026-05","price":4800}];
+const TOPITEMS=[["바로박 [SS100M]",12245,141.4],["IV카테타 [24G * 3/4 (50EA)]",7556,94.5],["닐스프린트 [4＂ 롤형 F]",2051,63.2],["닐스프린트 [4＂ 롤형 N]",1990,61.3],["실리콘폴리카테타 [16Fr]",27200,61.0],["닐스프린트 [3＂ 롤형 F]",1622,47.5],["레빈튜브 [16F]",16950,46.1],["멸균글러브(수술용) 50 PF [6.5]",41800,43.7]];
+
+// ===== 발주접수 (자동 업로드 / 수기 입력 → 발주서 자동생성) =====
+const MASTER={
+  "IV카테타 [24G * 3/4 (50EA)]":{stock:180,moq:100,vendor:"세운메디칼"},
+  "닐스프린트 [4＂ 롤형 F]":{stock:35,moq:50,vendor:"비엘테크"},
+  "레빈튜브 [16F]":{stock:720,moq:300,vendor:"세운메디칼"},
+  "멸균글러브(수술용) 50 PF [6.5]":{stock:1200,moq:500,vendor:"아남메디칼"},
+  "일회용주사기 [3cc 23G 100EA]":{stock:400,moq:200,vendor:"아남메디칼"},
+  "실리콘폴리카테타 [16Fr]":{stock:900,moq:500,vendor:"세운메디칼"},
+};
+const SAMPLE=[{name:"IV카테타 [24G * 3/4 (50EA)]",qty:400},{name:"닐스프린트 [4＂ 롤형 F]",qty:120},{name:"멸균글러브(수술용) 50 PF [6.5]",qty:800},{name:"레빈튜브 [16F]",qty:500}];
+let intakeMode="upload";
+
+document.querySelectorAll(".modetab").forEach(mt=>mt.addEventListener("click",()=>{
+  intakeMode=mt.dataset.mode;
+  document.querySelectorAll(".modetab").forEach(x=>x.classList.toggle("active",x===mt));
+  document.getElementById("mode-upload").classList.toggle("hide",intakeMode!=="upload");
+  document.getElementById("mode-manual").classList.toggle("hide",intakeMode!=="manual");
+  document.getElementById("mode-home").classList.toggle("hide",intakeMode!=="home");
+  document.getElementById("genBtnWrap").classList.toggle("hide",intakeMode==="home");
+}));
+
+function addManualRow(name="",qty=""){
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td><input class="m-name" list="itemList" value="${name}" placeholder="품목명 입력"></td><td><input class="m-qty" type="number" value="${qty}" placeholder="0" style="text-align:right"></td><td><button class="lnkbtn del">삭제</button></td>`;
+  tr.querySelector(".del").addEventListener("click",()=>tr.remove());
+  document.getElementById("manualRows").appendChild(tr);
+}
+// datalist for item suggestions
+const dl=document.createElement("datalist");dl.id="itemList";
+Object.keys(MASTER).forEach(k=>{const o=document.createElement("option");o.value=k;dl.appendChild(o);});
+document.body.appendChild(dl);
+addManualRow("IV카테타 [24G * 3/4 (50EA)]",400); addManualRow("닐스프린트 [4＂ 롤형 F]",120);
+document.getElementById("addRow").addEventListener("click",()=>addManualRow());
+
+document.getElementById("dropzone").addEventListener("click",()=>alert("실제 연동 시 발주서 파일을 업로드합니다.\n지금은 예시로 '발주서 자동 생성' 버튼을 눌러 결과를 확인하세요."));
+
+function genPO(presetRows,viaLabel){
+  let rows;
+  if(presetRows){ rows=presetRows; }
+  else if(intakeMode==="upload"){ rows=SAMPLE; }
+  else {
+    rows=[];
+    document.querySelectorAll("#manualRows tr").forEach(tr=>{
+      const n=tr.querySelector(".m-name").value.trim(), q=parseInt(tr.querySelector(".m-qty").value)||0;
+      if(n&&q>0) rows.push({name:n,qty:q});
+    });
+    if(!rows.length){ alert("품목과 요청수량을 입력하세요."); return; }
+  }
+  // 거래처별 정렬
+  rows=rows.map(r=>{const m=MASTER[r.name]||{stock:0,moq:1,vendor:"미지정"};
+    const short=Math.max(r.qty-m.stock,0);
+    const order=short>0?Math.ceil(short/m.moq)*m.moq:0;
+    return {...r,stock:m.stock,moq:m.moq,vendor:m.vendor,short,order};});
+  rows.sort((a,b)=>a.vendor.localeCompare(b.vendor));
+  const tb=document.querySelector("#genTable tbody");tb.innerHTML="";
+  rows.forEach(r=>{const tr=document.createElement("tr");
+    const oTag=r.order>0?`<b style="color:#dc2626">${r.order.toLocaleString()}</b>`:`<span style="color:#16a34a">0 (재고충당)</span>`;
+    tr.innerHTML=`<td>${r.vendor}</td><td>${r.name}</td><td class="num">${r.qty.toLocaleString()}</td><td class="num">${r.stock.toLocaleString()}</td><td class="num">${r.short.toLocaleString()}</td><td class="num">${r.moq}</td><td class="num">${oTag}</td>`;
+    tb.appendChild(tr);});
+  const now=new Date();
+  document.getElementById("poNo").textContent="PO-"+now.toISOString().slice(2,10).replace(/-/g,"")+"-A";
+  document.getElementById("poDate").textContent=now.toISOString().slice(0,10);
+  const viaMap={upload:"자동 업로드",manual:"수기 입력",home:"홈페이지 자동 수신"};
+  document.getElementById("poVia").textContent=viaLabel||viaMap[intakeMode];
+  document.getElementById("genResult").classList.remove("hide");
+  document.getElementById("genResult").scrollIntoView({behavior:"smooth"});
+}
+document.getElementById("genBtn").addEventListener("click",()=>genPO());
+
+// ----- 홈페이지 실시간 수신 시뮬레이션 -----
+const ORDER_POOL=[
+  {hosp:"서울정형외과의원",items:[{name:"IV카테타 [24G * 3/4 (50EA)]",qty:300},{name:"멸균글러브(수술용) 50 PF [6.5]",qty:600}]},
+  {hosp:"한빛재활병원",items:[{name:"레빈튜브 [16F]",qty:450},{name:"닐스프린트 [4＂ 롤형 F]",qty:80}]},
+  {hosp:"미래메디대리점",items:[{name:"일회용주사기 [3cc 23G 100EA]",qty:1000},{name:"실리콘폴리카테타 [16Fr]",qty:1200}]},
+  {hosp:"대전중앙병원",items:[{name:"IV카테타 [24G * 3/4 (50EA)]",qty:500},{name:"레빈튜브 [16F]",qty:300},{name:"닐스프린트 [4＂ 롤형 F]",qty:150}]},
+  {hosp:"건강한의원",items:[{name:"멸균글러브(수술용) 50 PF [6.5]",qty:400}]},
+];
+let inboxTimer=null, recvCount=0, poolIdx=0;
+function pushOrder(){
+  const o=ORDER_POOL[poolIdx%ORDER_POOL.length]; poolIdx++;
+  recvCount++;
+  const now=new Date();
+  const t=now.toTimeString().slice(0,8);
+  const totQty=o.items.reduce((s,i)=>s+i.qty,0);
+  const tr=document.createElement("tr"); tr.className="newrow";
+  tr.innerHTML=`<td>${t}</td><td>${o.hosp}</td><td class="num">${o.items.length}</td><td class="num">${totQty.toLocaleString()}</td><td><button class="lnkbtn">발주서 생성 ▸</button></td>`;
+  tr.querySelector("button").addEventListener("click",()=>genPO(o.items,"홈페이지 자동 수신 · "+o.hosp));
+  const tb=document.querySelector("#inboxTable tbody");
+  tb.insertBefore(tr,tb.firstChild);
+  document.getElementById("liveCnt").textContent=recvCount+"건 수신";
+}
+// home 모드 진입 시 수신 시작
+document.querySelectorAll(".modetab").forEach(mt=>mt.addEventListener("click",()=>{
+  if(mt.dataset.mode==="home"){
+    if(document.querySelector("#inboxTable tbody").children.length===0){pushOrder();pushOrder();}
+    if(!inboxTimer) inboxTimer=setInterval(pushOrder,6000);
+  } else if(inboxTimer){ clearInterval(inboxTimer); inboxTimer=null; }
+}));
+
+// ===== 구매업체별 (KPI 클릭) =====
+const VENDLIST=[{"name":"주식회사 세운메디칼","amt":851.8,"cnt":3134,"pct":33.9},{"name":"비엘테크 주식회사","amt":436.1,"cnt":5419,"pct":17.3},{"name":"(주)아남메디칼","amt":233.2,"cnt":2826,"pct":9.3},{"name":"(주)메디메스터","amt":136.0,"cnt":220,"pct":5.4},{"name":"경기의료공업(주)","amt":132.7,"cnt":59,"pct":5.3},{"name":"성심메디칼","amt":101.6,"cnt":249,"pct":4.0},{"name":"주식회사 한백","amt":74.8,"cnt":554,"pct":3.0},{"name":"(주)상길메디케어","amt":71.5,"cnt":289,"pct":2.8},{"name":"(주)창은레딕스","amt":51.4,"cnt":115,"pct":2.0},{"name":"(주)메디칼트리","amt":36.4,"cnt":58,"pct":1.4},{"name":"(주)메드메디","amt":35.5,"cnt":150,"pct":1.4},{"name":"성보","amt":34.8,"cnt":157,"pct":1.4},{"name":"주식회사 에이탑메드","amt":33.1,"cnt":234,"pct":1.3},{"name":"한백엠트레이드","amt":27.9,"cnt":135,"pct":1.1},{"name":"모닌","amt":23.7,"cnt":68,"pct":0.9},{"name":"주식회사 피엔제이메디칼","amt":22.1,"cnt":74,"pct":0.9},{"name":"한진양행","amt":22.0,"cnt":12,"pct":0.9},{"name":"(주)아이엠메디","amt":19.7,"cnt":197,"pct":0.8},{"name":"주식회사 모닌","amt":17.4,"cnt":55,"pct":0.7},{"name":"케어메디칼","amt":11.9,"cnt":28,"pct":0.5}];
+function wonM(mil){return "₩"+Math.round(mil*1e6).toLocaleString();}
+(function(){
+  const tb=document.querySelector("#vendTable tbody");
+  const mx=VENDLIST[0].pct;
+  VENDLIST.forEach((v,i)=>{const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${i+1}</td><td>${v.name}</td><td class="num">${v.cnt.toLocaleString()}</td><td class="num">${wonM(v.amt)}</td><td class="num">${v.pct}%<div class="bar"><span style="width:${Math.round(v.pct/mx*100)}%"></span></div></td>`;
+    tb.appendChild(tr);});
+  const bg=document.getElementById("vendModal");
+  document.getElementById("kpiAmt").addEventListener("click",()=>bg.classList.add("open"));
+  document.getElementById("vendClose").addEventListener("click",()=>bg.classList.remove("open"));
+  bg.addEventListener("click",e=>{if(e.target===bg)bg.classList.remove("open");});
+})();
+
+// ===== 운행 코스 (담당자별 · 요일별) — Leaflet 실지도 + 위젯 카드 =====
+const ROUTE={"base":{"name":"포스메드(서울 신월)","addr":"서울 양천구 신월동","ll":[37.528,126.834]},"drivers":{"임홍빈 대리":{"월":{"dist":222,"liters":24.7,"cost":41974,"stops":[{"name":"메디움 천안요양병원","addr":"충남 천안시 동남구 유량로 180","cycle":"정기","ll":[36.832,127.171]},{"name":"의료법인 이라의료재단(천안요양병원)","addr":"충남 천안시 동남구 삼룡천3길 10","cycle":"정기","ll":[36.808,127.165]}]},"화":{"dist":135,"liters":15.0,"cost":25511,"stops":[{"name":"(주)엠디오씨","addr":"경기 남양주시 덕송3로 95 별내","cycle":"정기","ll":[37.647,127.123]},{"name":"로젠요양병원","addr":"경기 동두천시 삼육사로 1012","cycle":"정기","ll":[37.903,127.06]}]},"수":{"dist":69,"liters":7.7,"cost":13122,"stops":[{"name":"부천삼성요양병원","addr":"경기 부천시 부일로 522","cycle":"정기","ll":[37.503,126.786]},{"name":"광명효 요양병원","addr":"경기 광명시 오리로 352","cycle":"정기","ll":[37.443,126.876]},{"name":"의료법인소애의료재단(시흥)","addr":"경기 시흥시 정왕대로 74","cycle":"발주시","ll":[37.345,126.742]}]},"목":{"dist":113,"liters":12.6,"cost":21395,"stops":[{"name":"효림요양병원","addr":"서울 동대문구 천호대로 259-1","cycle":"정기","ll":[37.566,127.052]},{"name":"선한빛요양병원","addr":"경기 광주시 경충대로1926번길 119","cycle":"정기","ll":[37.41,127.276]}]}},"박준만 과장":{"월":{"dist":55,"liters":6.1,"cost":10429,"stops":[{"name":"신성약품","addr":"경기 김포시 고촌읍 아라육로58번길 35-19","cycle":"발주시","ll":[37.602,126.77]},{"name":"W(더블유)여성병원","addr":"인천 미추홀구 인주대로 400","cycle":"정기","ll":[37.464,126.681]}]},"화":{"dist":46,"liters":5.2,"cost":8779,"stops":[{"name":"실버캐슬요양타운","addr":"서울 양천구 신월로 107","cycle":"발주시","ll":[37.53,126.836]},{"name":"목동어르신복지관","addr":"서울 양천구 목동중앙로3길 21","cycle":"발주시","ll":[37.526,126.866]},{"name":"서울대효병원(금천)","addr":"서울 금천구 시흥대로 230","cycle":"발주시","ll":[37.452,126.902]},{"name":"안양서울대효요양병원","addr":"경기 안양시 만안구 병목안로 20","cycle":"월1회","ll":[37.392,126.923]}]},"수":{"dist":99,"liters":11.0,"cost":18703,"stops":[{"name":"스카이요양병원","addr":"서울 도봉구 방학로 177","cycle":"정기","ll":[37.665,127.044]},{"name":"희망요양병원","addr":"서울 노원구 상계로26길 7","cycle":"발주시","ll":[37.66,127.073]},{"name":"별내요양병원","addr":"경기 남양주시 별내2로 74","cycle":"정기","ll":[37.647,127.12]},{"name":"조은매점","addr":"경기 의정부시 용현로105번길 45-14","cycle":"발주시","ll":[37.752,127.08]}]}}}};
+const CYCLECLR={"정기":"t-green","발주시":"t-amber","월1회":"t-blue"};
+const PINCLR={"정기":"#16a34a","발주시":"#d97706","월1회":"#7c3aed"};
+let curDrv=Object.keys(ROUTE.drivers)[0], curDay=null;
+let LMAP=null, LLAYER=null, lmapInit=false;
+let editing=false;
+// 운행 상태: STATUS[담당자][요일]={done:bool, at:'완료시각'}
+const STATUS={};
+Object.keys(ROUTE.drivers).forEach(dv=>{STATUS[dv]={};Object.keys(ROUTE.drivers[dv]).forEach(d=>STATUS[dv][d]={done:false,at:null});});
+function statusOf(){return STATUS[curDrv][curDay];}
+// 전체 납품처(추가용)
+const ALLPTS=(()=>{const m={};Object.values(ROUTE.drivers).forEach(days=>Object.values(days).forEach(c=>c.stops.forEach(s=>{m[s.name]={name:s.name,addr:s.addr,cycle:s.cycle,ll:s.ll.slice()};})));return Object.values(m).sort((a,b)=>a.name.localeCompare(b.name,"ko"));})();
+const DIESEL=1700, KMPL=9, ROAD=1.3, TOLL_PER_KM=50;
+function tollOf(c){return Math.round(c.dist*TOLL_PER_KM);}
+function totalCostOf(c){return c.cost+tollOf(c);}
+function haversine(a,b){const R=6371,r=Math.PI/180;
+  const dLa=(b[0]-a[0])*r,dLo=(b[1]-a[1])*r,la1=a[0]*r,la2=b[0]*r;
+  const h=Math.sin(dLa/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));}
+function recompute(c){
+  const seq=[ROUTE.base.ll,...c.stops.map(s=>s.ll),ROUTE.base.ll];
+  let d=0; for(let i=0;i<seq.length-1;i++) d+=haversine(seq[i],seq[i+1]);
+  d*=ROAD; c.dist=Math.round(d); c.liters=Math.round(d/KMPL*10)/10; c.cost=Math.round(d/KMPL*DIESEL);
+}
+function autoSort(c){ // 최근접 정렬
+  const rem=c.stops.slice(); const order=[]; let cur=ROUTE.base.ll;
+  while(rem.length){let bi=0,bd=1e9;rem.forEach((s,i)=>{const dd=haversine(cur,s.ll);if(dd<bd){bd=dd;bi=i;}});order.push(rem[bi]);cur=rem[bi].ll;rem.splice(bi,1);}
+  c.stops=order; recompute(c);
+}
+
+function ensureMap(){
+  if(lmapInit||typeof L==="undefined") return;
+  LMAP=L.map("routeMap",{zoomControl:true,scrollWheelZoom:false}).setView([37.45,127.0],9);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,attribution:"© OpenStreetMap"}).addTo(LMAP);
+  LLAYER=L.layerGroup().addTo(LMAP); lmapInit=true;
+}
+function pinIcon(color,label){
+  return L.divIcon({className:"leaf-pin",html:`<div style="background:${color}"><span>${label}</span></div>`,iconSize:[26,26],iconAnchor:[13,26],popupAnchor:[0,-24]});
+}
+function fitRoute(c){
+  if(!lmapInit)return;
+  const pts=[ROUTE.base.ll,...c.stops.map(s=>s.ll),ROUTE.base.ll];
+  LMAP.invalidateSize(); LMAP.fitBounds(L.latLngBounds(pts).pad(0.18));
+}
+function renderDriverTabs(){
+  document.getElementById("driverTabs").innerHTML=Object.keys(ROUTE.drivers).map(dv=>
+    `<div class="weektab ${dv===curDrv?"active":""}" data-drv="${dv}">${dv}</div>`).join("");
+  document.querySelectorAll("#driverTabs .weektab").forEach(t=>t.addEventListener("click",()=>{
+    curDrv=t.dataset.drv; curDay=Object.keys(ROUTE.drivers[curDrv])[0]; editing=false; renderCourse();
+  }));
+}
+function renderDayTabs(){
+  const days=ROUTE.drivers[curDrv];
+  document.getElementById("dayTabs").innerHTML=Object.keys(days).map(d=>
+    `<div class="daytab ${d===curDay?"active":""}" data-day="${d}"><div class="d">${d}</div><div class="dt">${days[d].stops.length}곳${STATUS[curDrv][d].done?" ✓":""}</div></div>`).join("");
+  document.querySelectorAll("#dayTabs .daytab").forEach(t=>t.addEventListener("click",()=>{curDay=t.dataset.day;editing=false;renderCourse();}));
+}
+function renderRouteBar(c){
+  const bar=document.getElementById("routeBar"); const st=statusOf();
+  let pill,btns;
+  if(st.done){ pill=`<span class="statuspill done">운행 완료 · ${st.at}</span>`; btns=`<button class="rbtn" id="rUndo">완료 취소</button>`; }
+  else if(editing){ pill=`<span class="statuspill edit">코스 수정 중</span>`; btns=`<button class="rbtn" id="rAuto">↺ 자동정렬</button><button class="rbtn pri" id="rApply">✓ 수정 적용</button>`; }
+  else { pill=`<span class="statuspill plan">운행 예정</span>`; btns=`<button class="rbtn" id="rEdit">✎ 코스 수정</button><button class="rbtn ok" id="rDone">✔ 운행 확정(완료)</button>`; }
+  bar.innerHTML=pill+btns;
+  const on=(id,fn)=>{const e=document.getElementById(id);if(e)e.addEventListener("click",fn);};
+  on("rEdit",()=>{editing=true;renderCourse();});
+  on("rApply",()=>{editing=false;renderCourse();});
+  on("rAuto",()=>{autoSort(c);renderStats(c);renderStopCards(c);renderMap(c);renderRouteBar(c);});
+  on("rDone",()=>{const n=new Date();st.done=true;st.at=`${n.getMonth()+1}/${n.getDate()} ${String(n.getHours()).padStart(2,"0")}:${String(n.getMinutes()).padStart(2,"0")}`;editing=false;renderCourse();});
+  on("rUndo",()=>{st.done=false;st.at=null;renderCourse();});
+}
+function renderStats(c){
+  const toll=tollOf(c), total=totalCostOf(c);
+  document.getElementById("courseStats").innerHTML=
+   `<div class="rstat"><div class="k">담당자</div><div class="v" style="font-size:15px">${curDrv}</div></div>
+    <div class="rstat"><div class="k">납품처</div><div class="v">${c.stops.length}<small> 곳</small></div></div>
+    <div class="rstat"><div class="k">총 거리(빠른길·왕복)</div><div class="v">${c.dist}<small> km</small></div></div>
+    <div class="rstat"><div class="k">유류비 / 톨게이트</div><div class="v" style="font-size:15px">₩${c.cost.toLocaleString()}<small> / ₩${toll.toLocaleString()}</small></div></div>
+    <div class="rstat fuel"><div class="k">예상 비용(합계)</div><div class="v">₩${total.toLocaleString()}</div></div>`;
+}
+function renderMap(c){
+  ensureMap(); if(!lmapInit)return;
+  LLAYER.clearLayers();
+  L.marker(ROUTE.base.ll,{icon:pinIcon("#1d6fb8","S")}).addTo(LLAYER).bindPopup(`<b>${ROUTE.base.name}</b><br>${ROUTE.base.addr} · 출발/도착`);
+  c.stops.forEach((s,i)=>{
+    L.marker(s.ll,{icon:pinIcon(PINCLR[s.cycle]||"#16a34a",String(i+1))}).addTo(LLAYER)
+      .bindPopup(`<b>${i+1}. ${s.name}</b><br>${s.addr}<br>납품주기: ${s.cycle}`);
+  });
+  const pts=[ROUTE.base.ll,...c.stops.map(s=>s.ll),ROUTE.base.ll];
+  L.polyline(pts,{color:"#1d6fb8",weight:3,opacity:.75,dashArray:"6 7"}).addTo(LLAYER);
+  setTimeout(()=>fitRoute(c),60);
+}
+function renderStopCards(c){
+  const wrap=document.getElementById("stopCards");
+  const done=statusOf().done;
+  let h=`<div class="scard base" data-idx="-1"><div class="seq">S</div><div><div class="nm">${ROUTE.base.name}</div><div class="ad">${ROUTE.base.addr} · 출발</div></div></div>`;
+  c.stops.forEach((s,i)=>{
+    const right=editing
+      ? `<div class="ed"><button data-act="up" data-i="${i}" title="위로">▲</button><button data-act="down" data-i="${i}" title="아래로">▼</button><button data-act="del" data-i="${i}" title="삭제">✕</button></div>`
+      : `<span class="tag ${CYCLECLR[s.cycle]||"t-gray"}">${s.cycle}</span>`;
+    h+=`<div class="scard ${done?"locked":""}" data-idx="${i}"><div class="seq">${i+1}</div><div><div class="nm">${s.name}</div><div class="ad">${s.addr}</div></div><div class="rt">${right}</div></div>`;
+  });
+  h+=`<div class="scard base" data-idx="-2"><div class="seq">↩</div><div><div class="nm">${ROUTE.base.name}</div><div class="ad">복귀 · 운행 종료</div></div></div>`;
+  if(editing){
+    const avail=ALLPTS.filter(p=>!c.stops.some(s=>s.name===p.name));
+    h+=`<div class="addrow"><select id="addSel"><option value="">+ 다른 납품처 추가…</option>${avail.map(p=>`<option value="${p.name}">${p.name} · ${p.cycle}</option>`).join("")}</select><button class="rbtn pri" id="addBtn">추가</button></div>`;
+  }
+  wrap.innerHTML=h;
+  wrap.querySelectorAll(".scard[data-idx]").forEach(el=>el.addEventListener("click",e=>{
+    if(e.target.closest(".ed"))return;
+    openStop(+el.dataset.idx,c);
+  }));
+  if(editing){
+    wrap.querySelectorAll(".ed button").forEach(b=>b.addEventListener("click",e=>{
+      e.stopPropagation();
+      const i=+b.dataset.i, act=b.dataset.act;
+      if(act==="up"&&i>0){[c.stops[i-1],c.stops[i]]=[c.stops[i],c.stops[i-1]];}
+      else if(act==="down"&&i<c.stops.length-1){[c.stops[i+1],c.stops[i]]=[c.stops[i],c.stops[i+1]];}
+      else if(act==="del"){c.stops.splice(i,1);}
+      recompute(c); renderStats(c); renderStopCards(c); renderMap(c); renderRouteBar(c);
+    }));
+    const ab=document.getElementById("addBtn");
+    if(ab)ab.addEventListener("click",()=>{
+      const v=document.getElementById("addSel").value; if(!v)return;
+      const p=ALLPTS.find(x=>x.name===v); if(!p)return;
+      c.stops.push({name:p.name,addr:p.addr,cycle:p.cycle,ll:p.ll.slice()});
+      recompute(c); renderStats(c); renderStopCards(c); renderMap(c); renderRouteBar(c);
+    });
+  }
+}
+function openStop(idx,c){
+  const m=document.getElementById("stopModal");
+  if(idx<0){
+    document.getElementById("smName").textContent=ROUTE.base.name;
+    document.getElementById("smSeq").textContent=idx===-1?"· 출발지":"· 복귀지";
+    document.getElementById("smBody").innerHTML=`<div class="smrow"><span class="k">주소</span><span>${ROUTE.base.addr}</span></div><div class="smrow"><span class="k">역할</span><span>${idx===-1?"운행 출발":"운행 복귀"}</span></div><div class="smrow"><span class="k">담당자</span><span>${curDrv} · ${curDay}요일</span></div>`;
+  } else {
+    const s=c.stops[idx];
+    document.getElementById("smName").textContent=s.name;
+    document.getElementById("smSeq").textContent=`· ${curDrv} ${curDay}요일 ${idx+1}번째 방문`;
+    document.getElementById("smBody").innerHTML=
+      `<div class="smrow"><span class="k">주소</span><span>${s.addr}</span></div>`+
+      `<div class="smrow"><span class="k">납품주기</span><span class="tag ${CYCLECLR[s.cycle]||"t-gray"}">${s.cycle}</span></div>`+
+      `<div class="smrow"><span class="k">방문 순서</span><span>${idx+1} / ${c.stops.length}</span></div>`+
+      `<div class="smrow"><span class="k">담당자</span><span>${curDrv}</span></div>`;
+    if(lmapInit){LMAP.setView(s.ll,12); LLAYER.eachLayer(l=>{if(l.getLatLng&&Math.abs(l.getLatLng().lat-s.ll[0])<1e-6)l.openPopup();});}
+  }
+  m.classList.add("open");
+}
+document.getElementById("smClose").addEventListener("click",()=>document.getElementById("stopModal").classList.remove("open"));
+document.getElementById("stopModal").addEventListener("click",e=>{if(e.target.id==="stopModal")e.currentTarget.classList.remove("open");});
+function renderCourse(){
+  renderDriverTabs(); renderDayTabs();
+  const c=ROUTE.drivers[curDrv][curDay];
+  renderRouteBar(c); renderStats(c); renderStopCards(c); renderMap(c);
+}
+curDay=Object.keys(ROUTE.drivers[curDrv])[0];
+renderCourse();
+// 운행코스 탭 열릴 때 지도 사이즈 보정
+document.querySelector('.nav .item[data-tab="route"]').addEventListener("click",()=>{
+  setTimeout(()=>fitRoute(ROUTE.drivers[curDrv][curDay]),240);
+});
+// 운행코스 엑셀 출력 (선택 담당자의 전체 요일)
+document.getElementById("routeXlsx").addEventListener("click",()=>{
+  const days=ROUTE.drivers[curDrv];
+  const aoa=[["담당자","요일","순서","납품처","주소","납품주기","요일거리(km)","유류비(원)","톨게이트(원)","예상비용(원)"]];
+  Object.keys(days).forEach(d=>{const c=days[d];
+    c.stops.forEach((s,i)=>aoa.push([curDrv,d,i+1,s.name,s.addr,s.cycle,c.dist,c.cost,tollOf(c),totalCostOf(c)]));
+  });
+  saveAOA(aoa,curDrv+"_운행코스","운행코스");
+});
+
+
+// ===== 탭 / 소분류 전환 =====
+const SUBMETA={order:["구매 · 발주","홈 · 구매 · 발주"],receive:["구매 · 입고","홈 · 구매 · 입고"],analyze:["구매 · 분석","홈 · 구매 · 분석"]};
+const parent=document.querySelector(".item.parent");
+const subnav=document.getElementById("subnav-purchase");
+
+function showTab(t){
+  document.querySelectorAll(".nav .item").forEach(x=>x.classList.remove("active"));
+  document.querySelector(`.nav .item[data-tab="${t}"]`).classList.add("active");
+  ["intake","purchase","ship","out","route","sales","acct"].forEach(id=>document.getElementById("tab-"+id).classList.toggle("hide",id!==t));
+  const on=(t==="purchase");
+  subnav.classList.toggle("open",on);
+  parent.classList.toggle("open",on);
+  if(t==="ship") setTimeout(()=>window.SHIPCHARTS&&window.SHIPCHARTS.forEach(c=>c&&c.resize()),60);
+  window.scrollTo(0,0);
+}
+window.CHARTS=[];
+function showSub(sub){
+  ["order","receive","analyze"].forEach(s=>document.getElementById("sub-"+s).classList.toggle("hide",s!==sub));
+  document.querySelectorAll(".subnav .subitem").forEach(x=>x.classList.toggle("active",x.dataset.sub===sub));
+  document.getElementById("puTitle").textContent=SUBMETA[sub][0];
+  document.getElementById("puCrumb").textContent=SUBMETA[sub][1];
+  if(sub==="analyze") setTimeout(()=>window.CHARTS.forEach(c=>c&&c.resize()),60);
+}
+
+document.querySelectorAll(".nav .item").forEach(it=>{
+  it.addEventListener("click",()=>showTab(it.dataset.tab));
+});
+document.querySelectorAll(".subnav .subitem").forEach(si=>{
+  si.addEventListener("click",e=>{
+    e.stopPropagation();
+    showTab("purchase");
+    showSub(si.dataset.sub);
+  });
+});
+
+// ===== 발주-입고 대사 =====
+const pos=[
+  {no:"PO-260610-01",date:"06-10",vendor:"세운메디칼",amount:"₩4,180,000",status:"부족입고",
+   items:[{name:"IV카테타 [24G * 3/4 (50EA)]",ord:300,rec:300},{name:"실리콘폴리카테타 [16Fr]",ord:1000,rec:600},{name:"레빈튜브 [16F]",ord:600,rec:600}]},
+  {no:"PO-260611-02",date:"06-11",vendor:"비엘테크",amount:"₩2,460,000",status:"미입고",
+   items:[{name:"닐스프린트 [4＂ 롤형 F]",ord:50,rec:0},{name:"닐스프린트 [3＂ 롤형 F]",ord:40,rec:0}]},
+  {no:"PO-260608-03",date:"06-08",vendor:"아남메디칼",amount:"₩3,920,000",status:"전량입고",
+   items:[{name:"멸균글러브(수술용) 50 PF [6.5]",ord:2000,rec:2000},{name:"일회용주사기 [3cc 23G 100EA]",ord:500,rec:500}]},
+  {no:"PO-260612-04",date:"06-12",vendor:"세운메디칼",amount:"₩2,100,000",status:"부족입고",
+   items:[{name:"바로박 [SS100M]",ord:200,rec:150},{name:"닐케스트 [5＂ 그린 N]",ord:100,rec:100}]},
+];
+function statusTag(s){const m={"전량입고":"t-green","부족입고":"t-amber","미입고":"t-red"};const e={"미입고":" (대기중)"};return `<span class="tag ${m[s]}">${s}${e[s]||""}</span>`;}
+function itemStatus(o,r){if(r===0)return{tag:'<span class="tag t-red">미입고</span>',c:'#dc2626'};if(r<o)return{tag:`<span class="tag t-amber">부족입고 (-${o-r})</span>`,c:'#d97706'};return{tag:'<span class="tag t-green">전량입고</span>',c:'#16a34a'};}
+const tb=document.querySelector("#poTable tbody");
+pos.forEach(p=>{
+  const tr=document.createElement("tr");tr.className="po";
+  tr.innerHTML=`<td><span class="chev">▶</span> ${p.no}</td><td>${p.date}</td><td>${p.vendor}</td><td class="num">${p.items.length}</td><td class="num">${p.amount}</td><td>${statusTag(p.status)}</td>`;
+  const det=document.createElement("tr");det.className="detail hide";
+  const rows=p.items.map(it=>{const st=itemStatus(it.ord,it.rec);const pct=Math.round(it.rec/it.ord*100);
+    return `<tr><td>${it.name}</td><td class="num">${it.ord}</td><td class="num">${it.rec}</td><td class="num">${it.ord-it.rec}</td><td><div class="progress"><span style="width:${pct}%;background:${st.c}"></span></div></td><td>${st.tag}</td></tr>`;}).join("");
+  det.innerHTML=`<td colspan="6"><div class="detail-inner"><h4>${p.no} · 품목별 입고 현황</h4><table><thead><tr><th>품목</th><th class="num">발주수량</th><th class="num">입고수량</th><th class="num">부족수량</th><th>입고율</th><th>상태</th></tr></thead><tbody>${rows}</tbody></table></div></td>`;
+  tr.addEventListener("click",()=>{const open=!det.classList.contains("hide");det.classList.toggle("hide",open);tr.classList.toggle("open",!open);});
+  tb.appendChild(tr);tb.appendChild(det);
+});
+
+// ===== 출고/재고 — 실시간 현재고 조회 (실판매현황 2025.01–2026.06 집계) =====
+const INV=[
+  {name:"바로박 [SS100M]",price:11346,sold:4185,mavg:232,stock:171,safety:186,resv:12,ncust:6,custs:["(주)엠디오씨","(주)에이치와이비컴퍼니","W(더블유)여성병원","(주)브로팜","비케이(BK)메디칼","에스디엔씨 주식회사"]},
+  {name:"IV카테타 [24G * 3/4 (50EA)]",price:11913,sold:2805,mavg:156,stock:168,safety:125,resv:10,ncust:23,custs:["주식회사 한백","동원메디칼","인제메디칼","세아메디칼","로젠요양병원","선한빛요양병원","효림요양병원","신성약품㈜","안양서울대효요양병원","부천삼성요양병원"]},
+  {name:"닐스프린트 [4＂ 롤형 F]",price:42618,sold:730,mavg:41,stock:39,safety:33,resv:4,ncust:27,custs:["(주)아남메디칼","참메디칼","디엔(DN)메디","(주)메드진헬스케어","더원메디칼","(주)엠디오씨","주식회사 에이탑메드","오케이 참병원","주식회사 한국메디플러스","주식회사 메이트헬스케어"]},
+  {name:"닐스프린트 [4＂ 롤형 N]",price:38833,sold:682,mavg:38,stock:17,safety:30,resv:2,ncust:33,custs:["디엔(DN)메디","(주)아남메디칼","(주)엠디오씨","메디칼케어","이지메디칼","주식회사 에이탑메드","주식회사 그린팜텍","주식회사 솔로몬팜","영메디칼의료기","유한회사 성실메디칼"]},
+  {name:"실리콘폴리카테타 [16Fr]",price:2346,sold:10468,mavg:582,stock:256,safety:466,resv:29,ncust:19,custs:["(주)엠디오씨","케이알닥터스 주식회사","W(더블유)여성병원","(주)에이치와이비컴퍼니","비케이(BK)메디칼","별내요양병원","선한빛요양병원","효림요양병원","스카이요양병원","안양서울대효요양병원"]},
+  {name:"닐스프린트 [3＂ 롤형 F]",price:37289,sold:584,mavg:32,stock:15,safety:26,resv:1,ncust:26,custs:["(주)아남메디칼","더원메디칼","주식회사 에이탑메드","참메디칼","디엔(DN)메디","(주)엠디오씨","주식회사 메이트헬스케어","바른메디칼","(주)브로팜","(주)메디플렉스"]},
+  {name:"레빈튜브 [16F]",price:2737,sold:6149,mavg:342,stock:288,safety:274,resv:50,ncust:15,custs:["(주)엠디오씨","효림요양병원","의료법인 이라의료재단(천안요양병원)","로젠요양병원","별내요양병원","부천삼성요양병원","광명효 요양병원","안양서울대효요양병원","선한빛요양병원","한동메디칼"]},
+  {name:"닐스프린트 [3＂ 롤형 N]",price:36664,sold:442,mavg:25,stock:13,safety:20,resv:1,ncust:32,custs:["(주)아남메디칼","(주)엠디오씨","주식회사 에이탑메드","이지메디칼","디엔(DN)메디","소망양행","서울메디케어(S.M.C)","주식회사 그린팜텍","(주)메디업파트너스","베베크메디컬"]},
+  {name:"멸균글러브(수술용) 50 PF [6.5]",price:1065,sold:14150,mavg:786,stock:828,safety:629,resv:159,ncust:3,custs:["케이알닥터스 주식회사","W(더블유)여성병원","에스디엔씨 주식회사"]},
+  {name:"닐케스트 플러스 [4＂ 그린 F]",price:2053,sold:6550,mavg:364,stock:364,safety:291,resv:40,ncust:34,custs:["(주)아남메디칼","디엔(DN)메디","주식회사 에이탑메드","(주)엠디오씨","우진헬스케어주식회사","유한회사 성실메디칼","(주)메드진헬스케어","(주)에이치와이비컴퍼니","주식회사 월드의료기","주식회사 메이트헬스케어"]},
+  {name:"라텍스석션카테타(tip) [14Fr]",price:325,sold:41314,mavg:2295,stock:3248,safety:1836,resv:185,ncust:15,custs:["(주)에이치와이비컴퍼니","선한빛요양병원","서울대효병원","효림요양병원","비케이(BK)메디칼","(주)엠디오씨","광명효 요양병원","별내요양병원","의료법인 이라의료재단(천안요양병원)","안양서울대효요양병원"]},
+  {name:"바로박 [PP400M]",price:9553,sold:1275,mavg:71,stock:92,safety:57,resv:9,ncust:4,custs:["(주)에이치와이비컴퍼니","(주)엠디오씨","에스디엔씨 주식회사","비케이(BK)메디칼"]},
+  {name:"에어웨이 4호 [Orange/주황색]",price:882,sold:12349,mavg:686,stock:377,safety:549,resv:26,ncust:12,custs:["(주)엠디오씨","(주)에이치와이비컴퍼니","비케이(BK)메디칼","메디트라","신성약품㈜","의료법인 이라의료재단(천안요양병원)","실버캐슬요양타운","서울대효병원","의료법인소애의료재단(시흥)","모닌"]},
+  {name:"폴리글러브 [중]",price:1738,sold:6187,mavg:344,stock:248,safety:275,resv:43,ncust:21,custs:["로젠요양병원","별내요양병원","W(더블유)여성병원","신성약품㈜","부천삼성요양병원","의료법인소애의료재단(시흥)","효림요양병원","의료법인 이라의료재단(천안요양병원)","광명효 요양병원","조은매점"]},
+  {name:"멸균글러브(수술용) 50 PF [7]",price:1068,sold:10050,mavg:558,stock:328,safety:446,resv:45,ncust:3,custs:["케이알닥터스 주식회사","W(더블유)여성병원","에스디엔씨 주식회사"]},
+  {name:"멸균글러브(수술용) 50 PF [7.5]",price:1037,sold:9850,mavg:547,stock:583,safety:438,resv:62,ncust:3,custs:["케이알닥터스 주식회사","에스디엔씨 주식회사","W(더블유)여성병원"]},
+  {name:"일회용주사기 [10cc 21G 100EA]",price:8364,sold:1174,mavg:65,stock:63,safety:52,resv:4,ncust:17,custs:["비케이(BK)메디칼","선한빛요양병원","W(더블유)여성병원","효림요양병원","광명효 요양병원","신성약품㈜","로젠요양병원","에스디엔씨 주식회사","스카이요양병원","부천삼성요양병원"]},
+  {name:"닐스프린트 [5＂*34 프리컷 F]",price:7915,sold:1115,mavg:62,stock:29,safety:50,resv:2,ncust:9,custs:["주식회사 서광메드","베베크메디컬","디엔(DN)메디","(주)중앙메디칼","우진헬스케어주식회사","제이피메디","(주)아남메디칼","(주)코리아메디칼디바이스","남양의료기"]},
+  {name:"라텍스석션카테타(tip) [16Fr]",price:334,sold:26320,mavg:1462,stock:1620,safety:1170,resv:185,ncust:9,custs:["의료법인 이라의료재단(천안요양병원)","(주)에이치와이비컴퍼니","(주)엠디오씨","선한빛요양병원","로젠요양병원","스카이요양병원","희망요양병원","효림요양병원","모닌"]},
+  {name:"닐스프린트 [5＂ 롤형 N]",price:43095,sold:199,mavg:11,stock:9,safety:10,resv:1,ncust:22,custs:["(주)정이메디칼","(주)아남메디칼","주식회사 솔로몬팜","주식회사 에이탑메드","(주)에이치와이비컴퍼니","소망양행","우진헬스케어주식회사","인제메디칼","주식회사 온오늘","디엔(DN)메디"]},
+  {name:"접은거즈 [4*4*8p]",price:7435,sold:1145,mavg:64,stock:56,safety:51,resv:5,ncust:12,custs:["광명효 요양병원","효림요양병원","의료법인 이라의료재단(천안요양병원)","스카이요양병원","안양서울대효요양병원","희망요양병원","서울대효병원","모닌","에스디엔씨 주식회사","주식회사 모닌"]},
+  {name:"일회용주사기 [3cc 23G 100EA]",price:4693,sold:1806,mavg:100,stock:123,safety:80,resv:19,ncust:22,custs:["동원메디칼","선한빛요양병원","W(더블유)여성병원","효림요양병원","비케이(BK)메디칼","광명효 요양병원","로젠요양병원","별내요양병원","안양서울대효요양병원","신성약품㈜"]},
+  {name:"실리콘폴리카테타 [18Fr]",price:2267,sold:3620,mavg:201,stock:132,safety:161,resv:18,ncust:16,custs:["(주)엠디오씨","케이알닥터스 주식회사","신성약품㈜","스카이요양병원","선한빛요양병원","광명효 요양병원","효림요양병원","희망요양병원","비케이(BK)메디칼","부천삼성요양병원"]},
+  {name:"실리콘폴리카테타 [14Fr]",price:2153,sold:3716,mavg:206,stock:195,safety:165,resv:35,ncust:7,custs:["(주)엠디오씨","케이알닥터스 주식회사","(주)에이치와이비컴퍼니","선한빛요양병원","에스디엔씨 주식회사","로젠요양병원","광명효 요양병원"]},
+  {name:"닐스프린트 [5＂ 롤형 F]",price:46556,sold:171,mavg:10,stock:14,safety:10,resv:1,ncust:18,custs:["(주)아남메디칼","더원메디칼","(주)메드진헬스케어","주식회사 에이탑메드","(주)엠디오씨","참메디칼","오케이 참병원","민성메디칼","주식회사 메이트헬스케어","디엔(DN)메디"]},
+  {name:"마이크로포 1530-1 [1＂]",price:9894,sold:803,mavg:45,stock:64,safety:36,resv:4,ncust:17,custs:["부천삼성요양병원","광명효 요양병원","스카이요양병원","의료법인 이라의료재단(천안요양병원)","안양서울대효요양병원","효림요양병원","별내요양병원","신성약품㈜","희망요양병원","서울대효병원"]},
+  {name:"닐케스트 플러스 [3＂ 그린 F]",price:1846,sold:4140,mavg:230,stock:192,safety:184,resv:31,ncust:31,custs:["(주)아남메디칼","디엔(DN)메디","주식회사 에이탑메드","(주)엠디오씨","조현메디칼","주식회사 엠앤디","유한회사 성실메디칼","우진헬스케어주식회사","(주)에이치와이비컴퍼니","참메디칼"]},
+  {name:"수액세트 DEHP FREE [무침 25EA]",price:8644,sold:869,mavg:48,stock:27,safety:38,resv:3,ncust:7,custs:["광명효 요양병원","비케이(BK)메디칼","효림요양병원","부천삼성요양병원","지에이메디칼 주식회사","희망요양병원","스카이요양병원"]},
+  {name:"3-WAY / 익스텐션튜브 [25cm]",price:578,sold:12400,mavg:689,stock:304,safety:551,resv:46,ncust:2,custs:["(주)엠디오씨","(주)에이치와이비컴퍼니"]},
+  {name:"일회용주사기(관장) [60cc 25EA]",price:6365,sold:1084,mavg:60,stock:72,safety:48,resv:10,ncust:17,custs:["동원메디칼","의료법인 이라의료재단(천안요양병원)","선한빛요양병원","효림요양병원","안양서울대효요양병원","신성약품㈜","로젠요양병원","스카이요양병원","광명효 요양병원","W(더블유)여성병원"]},
+  {name:"바로박 [PP400L]",price:9366,sold:710,mavg:39,stock:51,safety:31,resv:5,ncust:4,custs:["(주)에이치와이비컴퍼니","(주)엠디오씨","(주)브로팜","비케이(BK)메디칼"]},
+  {name:"투어스일자 CE07 [(30매*10팩)]",price:5040,sold:1450,mavg:81,stock:91,safety:65,resv:13,ncust:1,custs:["별내요양병원"]},
+  {name:"기저귀 일자패드 [(30매*8팩)]",price:5040,sold:1392,mavg:77,stock:78,safety:62,resv:9,ncust:1,custs:["로젠요양병원"]},
+  {name:"실리콘폴리카테타 [18Fr(3way)]",price:3988,sold:1574,mavg:87,stock:111,safety:70,resv:21,ncust:11,custs:["(주)엠디오씨","케이알닥터스 주식회사","효림요양병원","광명효 요양병원","로젠요양병원","부천삼성요양병원","선한빛요양병원","별내요양병원","의료법인 이라의료재단(천안요양병원)","서울대효병원"]},
+  {name:"레빈튜브 [18F]",price:2748,sold:2245,mavg:125,stock:112,safety:100,resv:17,ncust:12,custs:["(주)엠디오씨","신성약품㈜","스카이요양병원","광명효 요양병원","안양서울대효요양병원","한동메디칼","의료법인 이라의료재단(천안요양병원)","선한빛요양병원","효림요양병원","의료법인소애의료재단(시흥)"]},
+  {name:"넬라톤카테타(멸균) [＃7 /14Fr]",price:273,sold:22466,mavg:1248,stock:578,safety:998,resv:90,ncust:15,custs:["(주)엠디오씨","케이알닥터스 주식회사","(주)에이치와이비컴퍼니","부천삼성요양병원","서울대효병원","신성약품㈜","동원메디칼","효림요양병원","의료법인 이라의료재단(천안요양병원)","선한빛요양병원"]},
+  {name:"수액세트 DEHP FREE [Y타입 25EA]",price:9158,sold:641,mavg:36,stock:39,safety:29,resv:8,ncust:7,custs:["비케이(BK)메디칼","효림요양병원","광명효 요양병원","안양서울대효요양병원","스카이요양병원","부천삼성요양병원","희망요양병원"]},
+  {name:"닐스프린트 [4＂*34 프리컷 F]",price:6542,sold:855,mavg:48,stock:60,safety:38,resv:6,ncust:11,custs:["디엔(DN)메디","베베크메디컬","제이피메디","우진헬스케어주식회사","주식회사 에이탑메드","(주)중앙메디칼","(주)아남메디칼","주식회사 신우바이오로직스","(주)이지메디컴","(주)엠디오씨"]},
+  {name:"바로박 [PP200M]",price:9485,sold:585,mavg:32,stock:26,safety:26,resv:4,ncust:4,custs:["(주)엠디오씨","(주)에이치와이비컴퍼니","(주)브로팜","에스디엔씨 주식회사"]},
+  {name:"실리콘폴리카테타 [16Fr(3way)]",price:4030,sold:1216,mavg:68,stock:29,safety:54,resv:3,ncust:13,custs:["(주)엠디오씨","케이알닥터스 주식회사","(주)에이치와이비컴퍼니","로젠요양병원","부천삼성요양병원","효림요양병원","선한빛요양병원","서울대효병원","안양서울대효요양병원","광명효 요양병원"]},
+];
+function invStatus(it){
+  const avail=it.stock-it.resv;
+  if(avail<it.safety) return {tag:'<span class="tag t-red">부족</span>',c:'#dc2626'};
+  if(avail<it.safety*1.15) return {tag:'<span class="tag t-amber">근접</span>',c:'#d97706'};
+  return {tag:'<span class="tag t-green">정상</span>',c:'#16a34a'};
+}
+function renderInv(filter="",flashName=null){
+  const tb=document.querySelector("#invTable tbody"); tb.innerHTML="";
+  const q=filter.trim().toLowerCase();
+  const rows=INV.filter(it=>!q||it.name.toLowerCase().includes(q)||(it.custs||[]).some(c=>c.toLowerCase().includes(q)));
+  if(!rows.length){ tb.innerHTML=`<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:22px">검색 결과가 없습니다.</td></tr>`; return; }
+  rows.forEach(it=>{
+    const avail=it.stock-it.resv, st=invStatus(it);
+    const shown=it.custs||[], more=it.ncust-shown.length;
+    const tip=shown.join(', ')+(more>0?` 외 ${more}곳`:'');
+    const custTag=it.ncust>=2
+      ? `<span class="tag t-blue" title="${tip}">공용 ${it.ncust}</span>`
+      : `<span class="tag t-gray" title="${tip}">단독 ${it.ncust}</span>`;
+    const tr=document.createElement("tr");
+    if(it.name===flashName) tr.className="newrow";
+    tr.innerHTML=`<td>${it.name}</td>`+
+      `<td class="num">₩${it.price.toLocaleString()}</td>`+
+      `<td class="num">${it.sold.toLocaleString()}</td>`+
+      `<td class="num">${it.mavg.toLocaleString()}</td>`+
+      `<td>${custTag}</td>`+
+      `<td class="num"><b>${it.stock.toLocaleString()}</b></td>`+
+      `<td class="num">${it.safety.toLocaleString()}</td>`+
+      `<td class="num" style="color:${st.c};font-weight:600">${avail.toLocaleString()}</td>`+
+      `<td>${st.tag}</td>`;
+    tb.appendChild(tr);
+  });
+}
+function stampInv(){const n=new Date();document.getElementById("invUpdated").textContent="마지막 갱신 "+n.toTimeString().slice(0,8);}
+renderInv(); stampInv();
+document.getElementById("invSearch").addEventListener("input",e=>renderInv(e.target.value));
+document.getElementById("invClear").addEventListener("click",()=>{document.getElementById("invSearch").value="";renderInv();});
+// 출고 발생 시뮬레이션 — 7초마다 임의 품목 현재고 감소
+setInterval(()=>{
+  if(document.getElementById("tab-out").classList.contains("hide")) return;
+  const it=INV[Math.floor(Math.random()*INV.length)];
+  const out=Math.max(1,Math.round(it.stock*0.02));
+  it.stock=Math.max(0,it.stock-out);
+  renderInv(document.getElementById("invSearch").value,it.name);
+  stampInv();
+},7000);
+
+// ===== 한화 포맷 (mil = 백만원 단위) =====
+const won = mil => "₩" + Math.round(mil*1e6).toLocaleString();        // ₩141,400,000
+const eokman = mil => {                                              // 1억 4,140만원
+  const w=Math.round(mil*1e6), eok=Math.floor(w/1e8), man=Math.round((w%1e8)/1e4);
+  let s=""; if(eok)s+=eok+"억 "; if(man)s+=man.toLocaleString()+"만"; return (s||"0")+"원";
+};
+
+// ===== 상위 품목 =====
+const tit=document.querySelector("#topItems tbody");
+TOPITEMS.forEach((it,i)=>{const tr=document.createElement("tr");tr.innerHTML=`<td>${i+1}</td><td>${it[0]}</td><td class="num">${it[1].toLocaleString()}</td><td class="num">${won(it[2])}</td>`;tit.appendChild(tr);});
+
+// ===== 차트 =====
+window.CHARTS.push(new Chart(chMonthly,{type:"line",data:{labels:MONTHS.map(m=>m.ym.slice(2)),datasets:[{data:MONTHS.map(m=>m.amt*1e6),borderColor:"#1d6fb8",backgroundColor:"rgba(29,111,184,.12)",fill:true,tension:.3,pointRadius:2.5}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>"₩"+c.parsed.y.toLocaleString()}}},scales:{x:{ticks:{font:{size:10},maxRotation:60}},y:{ticks:{callback:v=>"₩"+(v/1e8)+"억"}}}}}));
+window.CHARTS.push(new Chart(chVendor,{type:"doughnut",data:{labels:VEND.map(v=>v.name),datasets:[{data:VEND.map(v=>v.amt),backgroundColor:["#0c447c","#1d6fb8","#0d9488","#7c3aed","#d97706","#16a34a","#b8c2cf"]}]},options:{plugins:{legend:{position:"right",labels:{boxWidth:11,font:{size:11}}},tooltip:{callbacks:{label:c=>" "+c.label+": "+eokman(c.parsed)}}}}}));
+window.CHARTS.push(new Chart(chCategory,{type:"bar",data:{labels:GRP.map(g=>g.name),datasets:[{data:GRP.map(g=>g.amt*1e6),backgroundColor:"#0d9488",borderRadius:5}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>"₩"+c.parsed.y.toLocaleString()}}},scales:{x:{ticks:{font:{size:10},maxRotation:50}},y:{ticks:{callback:v=>"₩"+(v/1e8)+"억"}}}}}));
+window.CHARTS.push(new Chart(chPrice,{type:"line",data:{labels:PRICE.map(p=>p.ym.slice(2)),datasets:[{data:PRICE.map(p=>p.price),borderColor:"#d97706",backgroundColor:"rgba(217,119,6,.12)",fill:true,tension:.3,pointRadius:2.5}]},options:{plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10},maxRotation:60}},y:{ticks:{callback:v=>"₩"+v.toLocaleString()}}}}}));
+
+// ===== 공통 엑셀 출력 =====
+function cellVal(c){
+  let t=(c.innerText||"").replace(/\s+/g," ").trim();
+  const stripped=t.replace(/[₩,%\s]/g,"");
+  if(stripped!==""&&/^-?[0-9]+(\.[0-9]+)?$/.test(stripped)) return Number(stripped);
+  return t;
+}
+function rowsOf(table){
+  return [...table.querySelectorAll(":scope>thead>tr, :scope>tbody>tr")].filter(tr=>!tr.classList.contains("detail"));
+}
+function tableAOA(table){
+  return rowsOf(table).map(tr=>[...tr.children].filter(c=>c.tagName==="TH"||c.tagName==="TD").map(cellVal)).filter(r=>r.length);
+}
+function saveAOA(aoa,filename,sheet){
+  if(!aoa||aoa.length<=1){alert("출력할 데이터가 없습니다. 먼저 조회하세요.");return;}
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,(sheet||"Sheet1").slice(0,31));
+  XLSX.writeFile(wb, filename+"_"+new Date().toISOString().slice(0,10)+".xlsx");
+}
+function exportTable(tableId,filename,sheet){
+  const t=document.getElementById(tableId); if(!t){alert("표를 찾을 수 없습니다.");return;}
+  saveAOA(tableAOA(t),filename,sheet);
+}
+function addXlsxButton(tableId,filename,sheet){
+  const t=document.getElementById(tableId); if(!t)return;
+  const bar=document.createElement("div");
+  bar.style.cssText="display:flex;justify-content:flex-end;margin-bottom:8px";
+  const b=document.createElement("button"); b.className="xbtn";
+  b.innerHTML='<span class="xi">X</span> 엑셀 출력';
+  b.addEventListener("click",()=>exportTable(tableId,filename,sheet));
+  bar.appendChild(b); t.parentNode.insertBefore(bar,t);
+}
+// 검색 가능한 현황표 + 모달/생성표에 엑셀 버튼 자동 부착
+addXlsxButton("invTable","재고현황","재고현황");
+addXlsxButton("poTable","발주입고현황","발주입고");
+addXlsxButton("topItems","구매상위품목","상위품목");
+addXlsxButton("vendTable","업체별구매현황","업체별구매");
+addXlsxButton("genTable","자동발주서","발주서");
+// 발주 제안(여러 표 합치기)
+document.getElementById("orderXlsx").addEventListener("click",()=>{
+  const tabs=[...document.querySelectorAll(".exp-order table")];
+  if(!tabs.length)return;
+  let aoa=[]; tabs.forEach((t,i)=>{const a=tableAOA(t); if(i>0)a.shift(); aoa=aoa.concat(a);});
+  saveAOA(aoa,"발주제안","발주제안");
+});
+
+// ===== 영업 · 거래명세서 (실거래 2025.01–2026.02) =====
+(function(){
+  const D=window.TXDATA;
+  if(!D){document.querySelector("#txTable tbody").innerHTML='<tr><td colspan="8" style="text-align:center;color:#dc2626;padding:22px">거래데이터 파일(포스메드_거래데이터.js)을 불러오지 못했습니다. HTML과 같은 폴더에 있어야 합니다.</td></tr>';return;}
+  const sel=document.getElementById("txCust"), from=document.getElementById("txFrom"), to=document.getElementById("txTo"), kwEl=document.getElementById("txItem");
+  sel.innerHTML='<option value="">— 전체 납품처 —</option>'+[...D.custs].sort((a,b)=>a.localeCompare(b,"ko")).map(c=>`<option>${c}</option>`).join("");
+  let mn="9999-99",mx="0";
+  D.tx.forEach(t=>{if(t[0]<mn)mn=t[0]; if(t[0]>mx)mx=t[0];});
+  from.min=to.min=mn; from.max=to.max=mx; from.value=mn; to.value=mx;
+  let current=[];
+  function search(){
+    const c=sel.value,f=from.value,t=to.value,kw=kwEl.value.trim().toLowerCase();
+    current=D.tx.filter(r=>{
+      if(c&&D.custs[r[7]]!==c)return false;
+      if(f&&r[0]<f)return false;
+      if(t&&r[0]>t)return false;
+      if(kw&&!D.items[r[1]].toLowerCase().includes(kw))return false;
+      return true;
+    });
+    render();
+  }
+  function render(){
+    const tb=document.querySelector("#txTable tbody"); tb.innerHTML="";
+    const sum=document.getElementById("txSummary");
+    if(!current.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:22px">조건에 맞는 거래가 없습니다.</td></tr>';sum.textContent="";return;}
+    let tot=0; current.forEach(r=>tot+=r[6]);
+    const MAX=500;
+    current.slice(0,MAX).forEach(r=>{
+      const tr=document.createElement("tr");
+      tr.innerHTML=`<td>${r[0]}</td><td>${D.items[r[1]]}</td><td class="num">${r[2].toLocaleString()}</td><td class="num">${r[3].toLocaleString()}</td><td class="num">${r[4].toLocaleString()}</td><td class="num">${r[5].toLocaleString()}</td><td class="num">${r[6].toLocaleString()}</td><td>${D.custs[r[7]]}</td>`;
+      tb.appendChild(tr);
+    });
+    sum.innerHTML=`총 <b>${current.length.toLocaleString()}</b>건 · 합계 <b>₩${tot.toLocaleString()}</b>`+(current.length>MAX?` <span style="color:#d97706">(화면 ${MAX}건 표시 · 엑셀/인쇄는 전체)</span>`:"");
+  }
+  document.getElementById("txSearch").addEventListener("click",search);
+  kwEl.addEventListener("keydown",e=>{if(e.key==="Enter")search();});
+  document.getElementById("txXlsx").addEventListener("click",()=>{
+    if(!current.length){alert("먼저 조회하세요.");return;}
+    const head=["일자","품목 및 규격","수량","단가","공급가액","부가세","합계","납품처"];
+    const aoa=[head,...current.map(r=>[r[0],D.items[r[1]],r[2],r[3],r[4],r[5],r[6],D.custs[r[7]]])];
+    saveAOA(aoa,(sel.value||"전체")+"_거래명세_"+from.value+"~"+to.value,"거래명세");
+  });
+  document.getElementById("txPrint").addEventListener("click",()=>{
+    if(!current.length){alert("먼저 조회하세요.");return;}
+    let qty=0,sup=0,vat=0,tot=0; current.forEach(r=>{qty+=r[2];sup+=r[4];vat+=r[5];tot+=r[6];});
+    const body=current.map(r=>`<tr><td>${r[0]}</td><td>${D.items[r[1]]}</td><td class="r">${r[2].toLocaleString()}</td><td class="r">${r[3].toLocaleString()}</td><td class="r">${r[4].toLocaleString()}</td><td class="r">${r[5].toLocaleString()}</td><td class="r">${r[6].toLocaleString()}</td></tr>`).join("");
+    const w=window.open("","_blank");
+    w.document.write(`<html><head><title>거래명세서</title><meta charset="utf-8"><style>body{font-family:'Malgun Gothic',sans-serif;padding:22px;font-size:12px;color:#222}h1{text-align:center;letter-spacing:8px;margin:0 0 14px}table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid #888;padding:5px 7px}th{background:#eef2f9}.r{text-align:right}.info{display:flex;justify-content:space-between;margin:4px 0}tfoot th{background:#f4f6fa}</style></head><body>
+      <h1>거 래 명 세 서</h1>
+      <div class="info"><div><b>공급자</b> : 주식회사 포스메드</div><div><b>출력일</b> : ${new Date().toISOString().slice(0,10)}</div></div>
+      <div class="info"><div><b>공급받는자</b> : ${sel.value||"전체 납품처"}</div><div><b>거래기간</b> : ${from.value} ~ ${to.value}</div></div>
+      <table><thead><tr><th>일자</th><th>품목 및 규격</th><th>수량</th><th>단가</th><th>공급가액</th><th>부가세</th><th>합계</th></tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot><tr><th colspan="2">합 계</th><th class="r">${qty.toLocaleString()}</th><th></th><th class="r">${sup.toLocaleString()}</th><th class="r">${vat.toLocaleString()}</th><th class="r">${tot.toLocaleString()}</th></tr></tfoot></table>
+      </body></html>`);
+    w.document.close(); w.focus(); setTimeout(()=>{try{w.print();}catch(e){}},400);
+  });
+  search();
+})();
+
+// ===== 출고 탭 (출고분석 + 출고내역) + 수금현황(영업) =====
+window.SHIPCHARTS=[];
+(function(){
+  const D=window.TXDATA; if(!D)return;
+  const byMonth={}, byCust={}, byItem={};
+  let totQty=0,totAmt=0,totCnt=D.tx.length; const custSet=new Set();
+  D.tx.forEach(r=>{
+    const ym=r[0].slice(0,7);
+    byMonth[ym]=(byMonth[ym]||0)+r[6];
+    byCust[r[7]]=(byCust[r[7]]||0)+r[6];
+    byItem[r[1]]=(byItem[r[1]]||0)+r[6];
+    totQty+=r[2]; totAmt+=r[6]; custSet.add(r[7]);
+  });
+  document.getElementById("shipKpis").innerHTML=
+   `<div class="kpi brand"><div class="label">총 출고액</div><div class="val">${eokman(totAmt/1e6)}</div><div class="foot">2025.01–2026.02</div></div>
+    <div class="kpi green"><div class="label">총 출고수량</div><div class="val">${totQty.toLocaleString()}</div><div class="foot">전 품목 합계</div></div>
+    <div class="kpi brand"><div class="label">출고 건수</div><div class="val">${totCnt.toLocaleString()}</div><div class="foot">거래라인 기준</div></div>
+    <div class="kpi green"><div class="label">납품처</div><div class="val">${custSet.size}곳</div><div class="foot">출고 대상</div></div>`;
+  const months=Object.keys(byMonth).sort();
+  const custTop=Object.entries(byCust).sort((a,b)=>b[1]-a[1]).slice(0,7);
+  const itemTop=Object.entries(byItem).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  window.SHIPCHARTS.push(new Chart(document.getElementById("chShipMonthly"),{type:"line",data:{labels:months.map(m=>m.slice(2)),datasets:[{data:months.map(m=>byMonth[m]),borderColor:"#0d9488",backgroundColor:"rgba(13,148,136,.12)",fill:true,tension:.3,pointRadius:2.5}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>"₩"+c.parsed.y.toLocaleString()}}},scales:{x:{ticks:{font:{size:10},maxRotation:60}},y:{ticks:{callback:v=>"₩"+(v/1e8).toFixed(1)+"억"}}}}}));
+  window.SHIPCHARTS.push(new Chart(document.getElementById("chShipCust"),{type:"doughnut",data:{labels:custTop.map(c=>D.custs[c[0]]),datasets:[{data:custTop.map(c=>c[1]),backgroundColor:["#0c447c","#1d6fb8","#0d9488","#7c3aed","#d97706","#16a34a","#b8c2cf"]}]},options:{plugins:{legend:{position:"right",labels:{boxWidth:11,font:{size:10}}},tooltip:{callbacks:{label:c=>" "+c.label+": "+eokman(c.parsed/1e6)}}}}}));
+  window.SHIPCHARTS.push(new Chart(document.getElementById("chShipItem"),{type:"bar",data:{labels:itemTop.map(c=>D.items[c[0]].replace(/\[.*?\]/g,"").slice(0,12)),datasets:[{data:itemTop.map(c=>c[1]),backgroundColor:"#1d6fb8",borderRadius:5}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{title:its=>D.items[itemTop[its[0].dataIndex][0]],label:c=>"₩"+c.parsed.y.toLocaleString()}}},scales:{x:{ticks:{font:{size:9},maxRotation:40}},y:{ticks:{callback:v=>"₩"+(v/1e8).toFixed(1)+"억"}}}}}));
+  // 출고내역 조회
+  const sel=document.getElementById("shCust"),from=document.getElementById("shFrom"),to=document.getElementById("shTo"),kwEl=document.getElementById("shItem");
+  sel.innerHTML='<option value="">— 전체 납품처 —</option>'+[...D.custs].sort((a,b)=>a.localeCompare(b,"ko")).map(c=>`<option>${c}</option>`).join("");
+  let mn="9999-99",mx="0"; D.tx.forEach(t=>{if(t[0]<mn)mn=t[0];if(t[0]>mx)mx=t[0];});
+  from.min=to.min=mn;from.max=to.max=mx;from.value=mn;to.value=mx;
+  let cur=[];
+  function search(){
+    const c=sel.value,f=from.value,t=to.value,kw=kwEl.value.trim().toLowerCase();
+    cur=D.tx.filter(r=>{if(c&&D.custs[r[7]]!==c)return false;if(f&&r[0]<f)return false;if(t&&r[0]>t)return false;if(kw&&!D.items[r[1]].toLowerCase().includes(kw))return false;return true;});
+    render();
+  }
+  function render(){
+    const tb=document.querySelector("#shTable tbody");tb.innerHTML="";const sum=document.getElementById("shSummary");
+    if(!cur.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">조건에 맞는 출고가 없습니다.</td></tr>';sum.textContent="";return;}
+    let q=0,a=0;cur.forEach(r=>{q+=r[2];a+=r[6];});
+    const MAX=500;
+    cur.slice(0,MAX).forEach(r=>{const tr=document.createElement("tr");
+      tr.innerHTML=`<td>${r[0]}</td><td>${D.items[r[1]]}</td><td class="num">${r[2].toLocaleString()}</td><td class="num">${r[3].toLocaleString()}</td><td class="num">${r[6].toLocaleString()}</td><td>${D.custs[r[7]]}</td>`;
+      tb.appendChild(tr);});
+    sum.innerHTML=`총 <b>${cur.length.toLocaleString()}</b>건 · 출고수량 <b>${q.toLocaleString()}</b> · 금액 <b>₩${a.toLocaleString()}</b>`+(cur.length>MAX?` <span style="color:#d97706">(화면 ${MAX}건)</span>`:"");
+  }
+  document.getElementById("shSearch").addEventListener("click",search);
+  kwEl.addEventListener("keydown",e=>{if(e.key==="Enter")search();});
+  document.getElementById("shipXlsx").addEventListener("click",()=>{
+    if(!cur.length){alert("먼저 조회하세요.");return;}
+    const head=["일자","품목 및 규격","출고수량","단가","출고금액","납품처"];
+    const aoa=[head,...cur.map(r=>[r[0],D.items[r[1]],r[2],r[3],r[6],D.custs[r[7]]])];
+    saveAOA(aoa,(sel.value||"전체")+"_출고내역_"+from.value+"~"+to.value,"출고내역");
+  });
+  search();
+
+  // ===== 수금현황 (영업) =====
+  const arRows=Object.entries(byCust).sort((a,b)=>b[1]-a[1]).map(([ci,amt])=>{
+    const name=D.custs[ci]; let h=0; for(const ch of name)h=(h*31+ch.charCodeAt(0))%100000;
+    const rate=0.62+(h%38)/100;
+    const paid=Math.round(amt*rate);
+    return {name,amt,paid,due:amt-paid,pct:Math.round(rate*100)};
+  });
+  let totSale=0,totPaid=0; arRows.forEach(r=>{totSale+=r.amt;totPaid+=r.paid;});
+  const totDue=totSale-totPaid;
+  document.getElementById("arKpis").innerHTML=
+   `<div class="kpi brand"><div class="label">누적 매출</div><div class="val">${eokman(totSale/1e6)}</div><div class="foot">실거래 합계</div></div>
+    <div class="kpi green"><div class="label">입금액</div><div class="val">${eokman(totPaid/1e6)}</div><div class="foot">수금 완료</div></div>
+    <div class="kpi red"><div class="label">미수금</div><div class="val">${eokman(totDue/1e6)}</div><div class="foot">회수 대상</div></div>
+    <div class="kpi brand"><div class="label">평균 수금률</div><div class="val">${Math.round(totPaid/totSale*100)}%</div><div class="foot">전체 기준</div></div>`;
+  const atb=document.querySelector("#arTable tbody");
+  arRows.forEach(r=>{
+    const tag=r.pct>=95?'<span class="tag t-green">정상</span>':r.pct>=80?'<span class="tag t-amber">주의</span>':'<span class="tag t-red">미수多</span>';
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${r.name}</td><td class="num">₩${r.amt.toLocaleString()}</td><td class="num">₩${r.paid.toLocaleString()}</td><td class="num" style="color:${r.due>0?"#dc2626":"#16a34a"}">₩${r.due.toLocaleString()}</td><td class="num">${r.pct}%</td><td>${tag}</td>`;
+    atb.appendChild(tr);
+  });
+  document.getElementById("arXlsx").addEventListener("click",()=>exportTable("arTable","수금현황","수금현황"));
+})();
+
+// ===== 전체 공통: 긴 설명 기본 접기 + ⓘ 토글 (시인성) =====
+(function(){
+  document.querySelectorAll("section").forEach(sec=>{
+    const h2=sec.querySelector("h2"); const desc=sec.querySelector(".desc");
+    if(!h2||!desc)return;
+    desc.classList.add("collapsed");
+    const b=document.createElement("button"); b.className="infobtn"; b.type="button"; b.textContent="ⓘ 설명";
+    b.addEventListener("click",e=>{e.stopPropagation();const hidden=desc.classList.toggle("collapsed");b.textContent=hidden?"ⓘ 설명":"닫기";});
+    h2.appendChild(b);
+  });
+})();
+</script>
+</body>
+</html>
